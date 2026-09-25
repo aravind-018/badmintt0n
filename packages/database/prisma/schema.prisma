@@ -1,0 +1,357 @@
+// =============================================================================
+// Prisma Schema — Badminton Live
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// Enums
+// =============================================================================
+
+enum Role {
+  SUPER_ADMIN
+  TOURNAMENT_ADMIN
+  SCORER
+  VIEWER
+}
+
+enum TournamentStatus {
+  DRAFT
+  PUBLISHED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum TournamentFormat {
+  KNOCKOUT
+  ROUND_ROBIN
+  GROUP_KNOCKOUT
+}
+
+enum CategoryType {
+  MENS_SINGLES
+  WOMENS_SINGLES
+  MENS_DOUBLES
+  WOMENS_DOUBLES
+  MIXED_DOUBLES
+  TEAM_EVENT
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum CourtStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+}
+
+enum MatchStatus {
+  SCHEDULED
+  CALLED
+  READY
+  LIVE
+  PAUSED
+  COMPLETED
+  POSTPONED
+  CANCELLED
+  WALKOVER
+  RETIRED
+}
+
+enum MatchEventType {
+  POINT_SIDE_A
+  POINT_SIDE_B
+  UNDO
+  PAUSE
+  RESUME
+  WALKOVER
+  RETIRE
+  COMPLETE
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  POINT_ADDED
+  POINT_UNDONE
+  MATCH_STARTED
+  MATCH_PAUSED
+  MATCH_RESUMED
+  MATCH_COMPLETED
+  FIXTURE_CHANGED
+  TEAM_CREATED
+  TEAM_EDITED
+  PLAYER_CREATED
+  PLAYER_EDITED
+  ADMIN_ACTION
+}
+
+// =============================================================================
+// Models
+// =============================================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(VIEWER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  createdTournaments Tournament[]
+  scoredMatches      Match[]        @relation("MatchScorer")
+  matchEvents        MatchEvent[]
+  announcements      Announcement[]
+  auditLogs          AuditLog[]
+  player             Player?
+
+  @@index([email])
+  @@index([role])
+}
+
+model Tournament {
+  id             String           @id @default(cuid())
+  slug           String           @unique
+  name           String
+  description    String?
+  venue          String?
+  logoUrl        String?
+  startDate      DateTime
+  endDate        DateTime
+  status         TournamentStatus @default(DRAFT)
+  format         TournamentFormat
+  numberOfCourts Int              @default(1)
+  createdById    String
+  createdBy      User             @relation(fields: [createdById], references: [id])
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  categories    Category[]
+  teams         Team[]
+  courts        Court[]
+  matches       Match[]
+  standings     Standing[]
+  announcements Announcement[]
+
+  @@index([slug])
+  @@index([status])
+}
+
+model Category {
+  id           String       @id @default(cuid())
+  tournamentId String
+  tournament   Tournament   @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  type         CategoryType
+  createdAt    DateTime     @default(now())
+
+  matches   Match[]
+  standings Standing[]
+
+  @@unique([tournamentId, type])
+  @@index([tournamentId])
+}
+
+model Team {
+  id           String     @id @default(cuid())
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  name         String
+  logoUrl      String?
+  organization String?
+  captainId    String?
+  contactName  String?
+  contactPhone String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  teamPlayers TeamPlayer[]
+  standings   Standing[]
+
+  @@index([tournamentId])
+}
+
+model Player {
+  id        String   @id @default(cuid())
+  name      String
+  photoUrl  String?
+  gender    Gender
+  seed      Int?
+  ranking   Int?
+  userId    String?  @unique
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teamPlayers TeamPlayer[]
+
+  @@index([userId])
+}
+
+model TeamPlayer {
+  id       String   @id @default(cuid())
+  teamId   String
+  team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  playerId String
+  player   Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  role     String?
+  joinedAt DateTime @default(now())
+
+  @@unique([teamId, playerId])
+  @@index([teamId])
+  @@index([playerId])
+}
+
+model Court {
+  id           String      @id @default(cuid())
+  tournamentId String
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  name         String
+  location     String?
+  status       CourtStatus @default(AVAILABLE)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  matches Match[]
+
+  @@index([tournamentId, status])
+}
+
+model Match {
+  id               String      @id @default(cuid())
+  tournamentId     String
+  tournament       Tournament  @relation(fields: [tournamentId], references: [id])
+  categoryId       String
+  category         Category    @relation(fields: [categoryId], references: [id])
+  round            String?
+  courtId          String?
+  court            Court?      @relation(fields: [courtId], references: [id])
+  scheduledAt      DateTime?
+  /// 'TEAM' | 'PLAYER'
+  sideAType        String
+  sideAId          String
+  sideAName        String
+  /// 'TEAM' | 'PLAYER'
+  sideBType        String
+  sideBId          String
+  sideBName        String
+  status           MatchStatus @default(SCHEDULED)
+  winnerId         String?
+  scorerId         String?
+  scorer           User?       @relation("MatchScorer", fields: [scorerId], references: [id])
+  startedAt        DateTime?
+  completedAt      DateTime?
+  currentGameState Json?
+  sideAGamesWon    Int         @default(0)
+  sideBGamesWon    Int         @default(0)
+  nextMatchId      String?
+  nextMatchSlot    String?     /// 'A' | 'B'
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  games  MatchGame[]
+  events MatchEvent[]
+
+  @@index([tournamentId, status])
+  @@index([courtId, status])
+  @@index([scorerId])
+}
+
+model MatchGame {
+  id          String    @id @default(cuid())
+  matchId     String
+  match       Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  gameNumber  Int
+  sideAPoints Int       @default(0)
+  sideBPoints Int       @default(0)
+  winnerId    String?
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  @@unique([matchId, gameNumber])
+  @@index([matchId])
+}
+
+model MatchEvent {
+  id            String         @id @default(cuid())
+  matchId       String
+  match         Match          @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  gameNumber    Int
+  type          MatchEventType
+  scorerId      String
+  scorer        User           @relation(fields: [scorerId], references: [id])
+  stateSnapshot Json
+  createdAt     DateTime       @default(now())
+
+  @@index([matchId, createdAt])
+  @@index([scorerId])
+}
+
+model Standing {
+  id               String     @id @default(cuid())
+  tournamentId     String
+  tournament       Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  categoryId       String
+  category         Category   @relation(fields: [categoryId], references: [id])
+  teamId           String?
+  team             Team?      @relation(fields: [teamId], references: [id])
+  playerId         String?
+  position         Int
+  played           Int        @default(0)
+  won              Int        @default(0)
+  lost             Int        @default(0)
+  gamesWon         Int        @default(0)
+  gamesLost        Int        @default(0)
+  pointsScored     Int        @default(0)
+  pointsConceded   Int        @default(0)
+  tournamentPoints Int        @default(0)
+  tiebreakData     Json?
+  updatedAt        DateTime   @updatedAt
+
+  @@index([tournamentId, categoryId, position])
+}
+
+model Announcement {
+  id           String     @id @default(cuid())
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  title        String
+  body         String
+  publishedAt  DateTime?
+  expiresAt    DateTime?
+  createdById  String
+  createdBy    User       @relation(fields: [createdById], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([tournamentId, publishedAt])
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  userId    String?
+  user      User?       @relation(fields: [userId], references: [id])
+  action    AuditAction
+  entity    String?
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  createdAt DateTime    @default(now())
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+}

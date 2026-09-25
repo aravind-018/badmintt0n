@@ -1,0 +1,13 @@
+{
+  "name": "@badminton-live/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared types and utilities for Badminton Live",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@badminton-live/scoring",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure TypeScript badminton scoring engine — no framework dependencies",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "paths": {
+      "@badminton-live/database": ["../../packages/database/src/index.ts"],
+      "@badminton-live/shared": ["../../packages/shared/src/index.ts"],
+      "@badminton-live/scoring": ["../../packages/scoring/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
