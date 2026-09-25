@@ -9,6 +9,8 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@badminton-live/shared': path.resolve(__dirname, '../../packages/shared/src/index.ts'),
+      '@badminton-live/scoring': path.resolve(__dirname, '../../packages/scoring/src/index.ts'),
+      '@badminton-live/database': path.resolve(__dirname, '../../packages/database/src/index.ts'),
     },
   },
   server: {

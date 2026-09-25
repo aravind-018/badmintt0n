@@ -9,7 +9,9 @@
   ],
   "scripts": {
     "dev": "concurrently --names \"API,WEB\" --prefix-colors \"cyan,green\" \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/web\"",
-    "build": "npm run build --workspaces --if-present",
+    "build:packages": "npm run build --workspace=packages/shared && npm run build --workspace=packages/scoring && npm run build --workspace=packages/database",
+    "build": "npm run build:packages && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
+    "vercel-build": "npm run build",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

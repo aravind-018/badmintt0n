@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "Pure TypeScript badminton scoring engine — no framework dependencies",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
