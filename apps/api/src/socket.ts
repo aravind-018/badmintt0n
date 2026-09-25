@@ -145,14 +145,16 @@ async function getMatchSnapshot(matchId: string) {
 
   if (!match) return null;
 
-  const scoringEvents: MatchEvent[] = match.events.map((e) => ({
-    id: e.id,
-    matchId: e.matchId,
-    gameNumber: e.gameNumber,
-    type: e.type as MatchEventType,
-    timestamp: e.createdAt.toISOString(),
-    createdBy: e.scorerId,
-  }));
+  const scoringEvents: MatchEvent[] = match.events.map(
+    (e: { id: string; matchId: string; gameNumber: number; type: string; createdAt: Date; scorerId: string }) => ({
+      id: e.id,
+      matchId: e.matchId,
+      gameNumber: e.gameNumber,
+      type: e.type as MatchEventType,
+      timestamp: e.createdAt.toISOString(),
+      createdBy: e.scorerId,
+    })
+  );
 
   const state = replayMatchEvents(scoringEvents);
   return { match, state };
@@ -173,14 +175,16 @@ export async function getActiveLiveData() {
   });
 
   return matches.map((match) => {
-    const scoringEvents: MatchEvent[] = match.events.map((e) => ({
-      id: e.id,
-      matchId: e.matchId,
-      gameNumber: e.gameNumber,
-      type: e.type as MatchEventType,
-      timestamp: e.createdAt.toISOString(),
-      createdBy: e.scorerId,
-    }));
+    const scoringEvents: MatchEvent[] = match.events.map(
+      (e: { id: string; matchId: string; gameNumber: number; type: string; createdAt: Date; scorerId: string }) => ({
+        id: e.id,
+        matchId: e.matchId,
+        gameNumber: e.gameNumber,
+        type: e.type as MatchEventType,
+        timestamp: e.createdAt.toISOString(),
+        createdBy: e.scorerId,
+      })
+    );
     const state = replayMatchEvents(scoringEvents);
     return { match, state };
   });

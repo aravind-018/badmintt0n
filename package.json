@@ -12,6 +12,7 @@
     "build:packages": "npm run build --workspace=packages/shared && npm run build --workspace=packages/scoring && npm run build --workspace=packages/database",
     "build": "npm run build:packages && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
     "vercel-build": "npm run build",
+    "postinstall": "npm run db:generate",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

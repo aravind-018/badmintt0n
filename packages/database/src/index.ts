@@ -22,4 +22,4 @@ if (process.env.NODE_ENV !== 'production') {
 
 // Re-export generated types
 export * from './generated/prisma';
-export { PrismaClient } from './generated/prisma';
+export { PrismaClient, Role } from './generated/prisma';

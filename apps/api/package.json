@@ -5,12 +5,18 @@
   "description": "Express + Socket.IO API server for Badminton Live",
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/index.ts",
+    "prebuild": "npx prisma generate --schema=../../packages/database/prisma/schema.prisma && npm run build:packages --prefix ../..",
     "build": "tsc --project tsconfig.json",
     "start": "node dist/index.js",
-    "test:phase2": "tsx src/test-phase2.ts",
-    "test:phase3": "tsx src/test-phase3.ts",
-    "test:phase4": "tsx src/test-phase4.ts",
-    "test:phase5": "tsx src/test-phase5-scoring.ts",
+    "test:phase2": "tsx tests/test-phase2.ts",
+    "test:phase3": "tsx tests/test-phase3.ts",
+    "test:phase4": "tsx tests/test-phase4.ts",
+    "test:phase5": "tsx tests/test-phase5-scoring.ts",
+    "test:phase6": "tsx tests/test-phase6-live.ts",
+    "test:phase7": "tsx tests/test-phase7-public.ts",
+    "test:phase8": "tsx tests/test-phase8.ts",
+    "test:phase9": "tsx tests/test-phase9-comprehensive.ts",
+    "test": "tsx tests/test-phase9-comprehensive.ts",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
@@ -32,6 +38,7 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.10.0",
+    "socket.io-client": "^4.8.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

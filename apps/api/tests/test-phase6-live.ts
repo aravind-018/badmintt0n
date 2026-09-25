@@ -106,7 +106,7 @@ function createClient(id?: string): ClientSocket {
 function waitForEvent(socket: ClientSocket, event: string, timeout = 5000): Promise<any> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Timeout waiting for "${event}"`)), timeout);
-    socket.once(event, (data) => {
+    socket.once(event, (data: unknown) => {
       clearTimeout(timer);
       resolve(data);
     });
@@ -118,7 +118,7 @@ function waitForConnect(socket: ClientSocket): Promise<void> {
     if (socket.connected) return resolve();
     const timer = setTimeout(() => reject(new Error('Socket connect timeout')), 5000);
     socket.once('connect', () => { clearTimeout(timer); resolve(); });
-    socket.once('connect_error', (err) => { clearTimeout(timer); reject(err); });
+    socket.once('connect_error', (err: Error) => { clearTimeout(timer); reject(err); });
   });
 }
 
