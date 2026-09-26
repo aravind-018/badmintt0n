@@ -13,6 +13,8 @@ export const AdminFixturesPage: React.FC = () => {
   const [tournaments, setTournaments] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [courts, setCourts] = useState<any[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [players, setPlayers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -40,8 +42,17 @@ export const AdminFixturesPage: React.FC = () => {
   const [winnerId, setWinnerId] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Quick participant picker state
+  const [sideAPlayer1, setSideAPlayer1] = useState('');
+  const [sideAPlayer2, setSideAPlayer2] = useState('');
+  const [sideBPlayer1, setSideBPlayer1] = useState('');
+  const [sideBPlayer2, setSideBPlayer2] = useState('');
+
   // Generator states
   const [generatorType, setGeneratorType] = useState<'KNOCKOUT' | 'ROUND_ROBIN'>('KNOCKOUT');
+
+  const selectedCategoryObj = categories.find((c) => c.id === categoryId);
+  const isDoublesCategory = selectedCategoryObj?.type?.includes('DOUBLES');
 
   const fetchData = async () => {
     setLoading(true);
@@ -52,22 +63,28 @@ export const AdminFixturesPage: React.FC = () => {
       if (statusFilter) query += `&status=${statusFilter}`;
       if (roundFilter) query += `&round=${encodeURIComponent(roundFilter)}`;
 
-      const [matchRes, tournRes, catRes, courtRes] = await Promise.all([
+      const [matchRes, tournRes, catRes, courtRes, teamRes, playerRes] = await Promise.all([
         fetch(query),
         fetch('/api/v1/tournaments'),
         fetch('/api/v1/categories'),
         fetch('/api/v1/courts'),
+        fetch('/api/v1/teams'),
+        fetch('/api/v1/players'),
       ]);
 
       const mData = await matchRes.json();
       const tData = await tournRes.json();
       const cData = await catRes.json();
       const crtData = await courtRes.json();
+      const tmData = await teamRes.json();
+      const plData = await playerRes.json();
 
       setMatches(mData.matches || []);
       setTournaments(tData.tournaments || []);
       setCategories(cData.categories || []);
       setCourts(crtData.courts || []);
+      setTeams(tmData.teams || []);
+      setPlayers(plData.players || []);
 
       if (tData.tournaments?.length > 0 && !tournamentId) {
         setTournamentId(tData.tournaments[0].id);
@@ -79,6 +96,31 @@ export const AdminFixturesPage: React.FC = () => {
       showToast('Failed to load matches', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSelectTeamForSide = (side: 'A' | 'B', selectedTeamId: string) => {
+    if (!selectedTeamId) return;
+    const team = teams.find((t) => t.id === selectedTeamId);
+    if (!team) return;
+
+    if (isDoublesCategory) {
+      if (team.teamPlayers && team.teamPlayers.length >= 2) {
+        const pairNames = team.teamPlayers.map((tp: any) => tp.player.name).slice(0, 2).join(' / ');
+        const fullName = `${pairNames} (${team.name})`;
+        if (side === 'A') setSideAName(fullName);
+        else setSideBName(fullName);
+      } else if (team.teamPlayers && team.teamPlayers.length === 1) {
+        const fullName = `${team.teamPlayers[0].player.name} (${team.name})`;
+        if (side === 'A') setSideAName(fullName);
+        else setSideBName(fullName);
+      } else {
+        if (side === 'A') setSideAName(team.name);
+        else setSideBName(team.name);
+      }
+    } else {
+      if (side === 'A') setSideAName(team.name);
+      else setSideBName(team.name);
     }
   };
 
@@ -439,25 +481,64 @@ export const AdminFixturesPage: React.FC = () => {
                 </div>
               </div>
 
+              {isDoublesCategory && (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] flex items-center justify-between">
+                  <span>🏸 <strong>Doubles Category Detected:</strong> Select teams to auto-combine players (e.g. Player 1 / Player 2) or enter pair names manually.</span>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Side A Name *</label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-slate-300 font-semibold">Side A Name *</label>
+                    {teams.length > 0 && (
+                      <select
+                        onChange={(e) => handleSelectTeamForSide('A', e.target.value)}
+                        className="text-[10px] bg-dark-800 border border-slate-700 text-brand-400 rounded px-1.5 py-0.5 focus:outline-none"
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Pick Team...</option>
+                        {teams.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.teamPlayers?.length || 0} players)
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={sideAName}
                     onChange={(e) => setSideAName(e.target.value)}
-                    placeholder="Viktor Axelsen"
+                    placeholder={isDoublesCategory ? "Player 1 / Player 2" : "Viktor Axelsen"}
                     className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white"
                     required
                   />
                 </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Side B Name *</label>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-slate-300 font-semibold">Side B Name *</label>
+                    {teams.length > 0 && (
+                      <select
+                        onChange={(e) => handleSelectTeamForSide('B', e.target.value)}
+                        className="text-[10px] bg-dark-800 border border-slate-700 text-brand-400 rounded px-1.5 py-0.5 focus:outline-none"
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Pick Team...</option>
+                        {teams.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.teamPlayers?.length || 0} players)
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={sideBName}
                     onChange={(e) => setSideBName(e.target.value)}
-                    placeholder="Shi Yuqi"
+                    placeholder={isDoublesCategory ? "Player 3 / Player 4" : "Shi Yuqi"}
                     className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white"
                     required
                   />

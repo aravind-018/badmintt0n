@@ -206,16 +206,74 @@ matchRouter.post('/generate-knockout', authenticateToken, requireRole('SUPER_ADM
     return;
   }
 
-  // Get participants (default from players if not passed)
-  let players: any[] = [];
+  // Retrieve category to check if event is Doubles
+  const category = await prisma.category.findUnique({ where: { id: categoryId } });
+  const isDoubles = category?.type === 'MENS_DOUBLES' || category?.type === 'WOMENS_DOUBLES' || category?.type === 'MIXED_DOUBLES';
+
+  // Get participants (from explicit payload, tournament teams, or players)
+  let players: { id: string; name: string; type: string }[] = [];
   if (participantIds && Array.isArray(participantIds) && participantIds.length > 0) {
     players = participantIds.map((id: string, index: number) => ({
       id,
       name: participantNames?.[index] || `Participant ${index + 1}`,
+      type: 'PLAYER',
     }));
   } else {
-    const fetched = await prisma.player.findMany({ take: 8, orderBy: { seed: 'asc' } });
-    players = fetched.map((p) => ({ id: p.id, name: p.name }));
+    // 1. Check if teams exist for this tournament
+    const teams = await prisma.team.findMany({
+      where: { tournamentId },
+      include: { teamPlayers: { include: { player: true } } },
+    });
+
+    if (teams.length >= 2) {
+      players = teams.map((team) => {
+        let name = team.name;
+        if (isDoubles) {
+          if (team.teamPlayers.length >= 2) {
+            const playerPair = team.teamPlayers.map((tp) => tp.player.name).slice(0, 2).join(' / ');
+            name = `${playerPair} (${team.name})`;
+          } else if (team.teamPlayers.length === 1) {
+            name = `${team.teamPlayers[0].player.name} (${team.name})`;
+          }
+        }
+        return {
+          id: team.id,
+          name,
+          type: 'TEAM',
+        };
+      });
+    } else {
+      // 2. Fetch individual players and group into doubles pairs if category is Doubles
+      const fetchedPlayers = await prisma.player.findMany({ orderBy: { seed: 'asc' } });
+      if (isDoubles) {
+        const doublesPairs: { id: string; name: string; type: string }[] = [];
+        for (let i = 0; i < fetchedPlayers.length; i += 2) {
+          if (i + 1 < fetchedPlayers.length) {
+            const p1 = fetchedPlayers[i];
+            const p2 = fetchedPlayers[i + 1];
+            doublesPairs.push({
+              id: `${p1.id}_${p2.id}`,
+              name: `${p1.name} / ${p2.name}`,
+              type: 'PLAYER',
+            });
+          } else {
+            const p = fetchedPlayers[i];
+            doublesPairs.push({
+              id: p.id,
+              name: p.name,
+              type: 'PLAYER',
+            });
+          }
+        }
+        players = doublesPairs;
+      } else {
+        players = fetchedPlayers.map((p) => ({
+          id: p.id,
+          name: p.name,
+          type: 'PLAYER',
+        }));
+      }
+    }
   }
 
   // Determine rounds: Quarter Final (4 matches), Semi Final (2 matches), Final (1 match)
@@ -254,10 +312,10 @@ matchRouter.post('/generate-knockout', authenticateToken, requireRole('SUPER_ADM
       categoryId,
       round: 'Semi Final',
       scheduledAt: new Date(Date.now() + 86400000), // 1 day later
-      sideAType: 'PLAYER',
+      sideAType: players[0]?.type || 'PLAYER',
       sideAId: players[0]?.id || 'TBD',
       sideAName: players[0]?.name || 'Winner QF 1',
-      sideBType: 'PLAYER',
+      sideBType: players[3]?.type || 'PLAYER',
       sideBId: players[3]?.id || 'TBD',
       sideBName: players[3]?.name || 'Winner QF 2',
       status: 'SCHEDULED',
@@ -273,10 +331,10 @@ matchRouter.post('/generate-knockout', authenticateToken, requireRole('SUPER_ADM
       categoryId,
       round: 'Semi Final',
       scheduledAt: new Date(Date.now() + 86400000), // 1 day later
-      sideAType: 'PLAYER',
+      sideAType: players[1]?.type || 'PLAYER',
       sideAId: players[1]?.id || 'TBD',
       sideAName: players[1]?.name || 'Winner QF 3',
-      sideBType: 'PLAYER',
+      sideBType: players[2]?.type || 'PLAYER',
       sideBId: players[2]?.id || 'TBD',
       sideBName: players[2]?.name || 'Winner QF 4',
       status: 'SCHEDULED',
@@ -296,10 +354,10 @@ matchRouter.post('/generate-knockout', authenticateToken, requireRole('SUPER_ADM
         categoryId,
         round: 'Quarter Final',
         scheduledAt: new Date(),
-        sideAType: 'PLAYER',
+        sideAType: players[0]?.type || 'PLAYER',
         sideAId: players[0]?.id || 'p1',
         sideAName: players[0]?.name || 'Player 1',
-        sideBType: 'PLAYER',
+        sideBType: players[7]?.type || 'PLAYER',
         sideBId: players[7]?.id || 'p8',
         sideBName: players[7]?.name || 'Player 8',
         status: 'SCHEDULED',
@@ -315,10 +373,10 @@ matchRouter.post('/generate-knockout', authenticateToken, requireRole('SUPER_ADM
         categoryId,
         round: 'Quarter Final',
         scheduledAt: new Date(),
-        sideAType: 'PLAYER',
+        sideAType: players[3]?.type || 'PLAYER',
         sideAId: players[3]?.id || 'p4',
         sideAName: players[3]?.name || 'Player 4',
-        sideBType: 'PLAYER',
+        sideBType: players[4]?.type || 'PLAYER',
         sideBId: players[4]?.id || 'p5',
         sideBName: players[4]?.name || 'Player 5',
         status: 'SCHEDULED',
@@ -334,10 +392,10 @@ matchRouter.post('/generate-knockout', authenticateToken, requireRole('SUPER_ADM
         categoryId,
         round: 'Quarter Final',
         scheduledAt: new Date(),
-        sideAType: 'PLAYER',
+        sideAType: players[1]?.type || 'PLAYER',
         sideAId: players[1]?.id || 'p2',
         sideAName: players[1]?.name || 'Player 2',
-        sideBType: 'PLAYER',
+        sideBType: players[6]?.type || 'PLAYER',
         sideBId: players[6]?.id || 'p7',
         sideBName: players[6]?.name || 'Player 7',
         status: 'SCHEDULED',
@@ -353,10 +411,10 @@ matchRouter.post('/generate-knockout', authenticateToken, requireRole('SUPER_ADM
         categoryId,
         round: 'Quarter Final',
         scheduledAt: new Date(),
-        sideAType: 'PLAYER',
+        sideAType: players[2]?.type || 'PLAYER',
         sideAId: players[2]?.id || 'p3',
         sideAName: players[2]?.name || 'Player 3',
-        sideBType: 'PLAYER',
+        sideBType: players[5]?.type || 'PLAYER',
         sideBId: players[5]?.id || 'p6',
         sideBName: players[5]?.name || 'Player 6',
         status: 'SCHEDULED',
@@ -384,9 +442,56 @@ matchRouter.post('/generate-round-robin', authenticateToken, requireRole('SUPER_
     return;
   }
 
-  const players = await prisma.player.findMany({ take: 4 });
+  const category = await prisma.category.findUnique({ where: { id: categoryId } });
+  const isDoubles = category?.type === 'MENS_DOUBLES' || category?.type === 'WOMENS_DOUBLES' || category?.type === 'MIXED_DOUBLES';
+
+  let players: { id: string; name: string; type: string }[] = [];
+
+  const teams = await prisma.team.findMany({
+    where: { tournamentId },
+    include: { teamPlayers: { include: { player: true } } },
+  });
+
+  if (teams.length >= 2) {
+    players = teams.map((team) => {
+      let name = team.name;
+      if (isDoubles) {
+        if (team.teamPlayers.length >= 2) {
+          const playerPair = team.teamPlayers.map((tp) => tp.player.name).slice(0, 2).join(' / ');
+          name = `${playerPair} (${team.name})`;
+        } else if (team.teamPlayers.length === 1) {
+          name = `${team.teamPlayers[0].player.name} (${team.name})`;
+        }
+      }
+      return { id: team.id, name, type: 'TEAM' };
+    });
+  } else {
+    const fetchedPlayers = await prisma.player.findMany({ orderBy: { seed: 'asc' } });
+    if (isDoubles) {
+      const doublesPairs: { id: string; name: string; type: string }[] = [];
+      for (let i = 0; i < fetchedPlayers.length; i += 2) {
+        if (i + 1 < fetchedPlayers.length) {
+          doublesPairs.push({
+            id: `${fetchedPlayers[i].id}_${fetchedPlayers[i + 1].id}`,
+            name: `${fetchedPlayers[i].name} / ${fetchedPlayers[i + 1].name}`,
+            type: 'PLAYER',
+          });
+        } else {
+          doublesPairs.push({
+            id: fetchedPlayers[i].id,
+            name: fetchedPlayers[i].name,
+            type: 'PLAYER',
+          });
+        }
+      }
+      players = doublesPairs;
+    } else {
+      players = fetchedPlayers.map((p) => ({ id: p.id, name: p.name, type: 'PLAYER' }));
+    }
+  }
+
   if (players.length < 2) {
-    res.status(400).json({ error: 'At least 2 players are required for Round Robin' });
+    res.status(400).json({ error: 'At least 2 teams or player pairs are required for Round Robin' });
     return;
   }
 
@@ -400,10 +505,10 @@ matchRouter.post('/generate-round-robin', authenticateToken, requireRole('SUPER_
           categoryId,
           round: `Round Robin`,
           scheduledAt: new Date(Date.now() + (i + j) * 3600000),
-          sideAType: 'PLAYER',
+          sideAType: players[i].type || 'PLAYER',
           sideAId: players[i].id,
           sideAName: players[i].name,
-          sideBType: 'PLAYER',
+          sideBType: players[j].type || 'PLAYER',
           sideBId: players[j].id,
           sideBName: players[j].name,
           status: 'SCHEDULED',
@@ -418,3 +523,4 @@ matchRouter.post('/generate-round-robin', authenticateToken, requireRole('SUPER_
     matches: createdMatches,
   });
 });
+
