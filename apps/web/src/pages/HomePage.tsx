@@ -18,7 +18,7 @@ function LiveMatchCard({ entry }: { entry: any }) {
         <StatusBadge status={match.status} />
       </div>
       <div className="hlc-score">
-        <div className="hlc-side">
+        <div className="hlc-side hlc-side-a">
           <span className={`hlc-name ${state?.winner === 'A' ? 'winner' : ''}`}>
             {match.sideAName || 'TBD'}
           </span>
@@ -493,11 +493,21 @@ export const HomePage: React.FC = () => {
           flex: 1;
           display: flex;
           align-items: center;
-          justify-content: space-between;
           gap: 0.5rem;
           min-width: 0;
         }
-        .hlc-side-b { flex-direction: row-reverse; }
+        .hlc-side-a {
+          justify-content: flex-end;
+        }
+        .hlc-side-b {
+          justify-content: flex-start;
+        }
+        .hlc-side-a .hlc-name {
+          text-align: right;
+        }
+        .hlc-side-b .hlc-name {
+          text-align: left;
+        }
         .hlc-name {
           font-size: 0.875rem;
           font-weight: 600;

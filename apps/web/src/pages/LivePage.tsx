@@ -57,8 +57,8 @@ function ScoreCard({ entry, pulse }: { entry: LiveMatchEntry; pulse: boolean }) 
       <div className="score-board">
         {/* Side A */}
         <div className={`side side-a ${state.winner === 'A' ? 'winner' : ''}`}>
-          <div className="side-names">
-          {sideALabel}
+          <div className="side-names align-right">
+            {sideALabel}
           </div>
           <div className="game-scores">
             {state.games.map((g, i) => (
@@ -98,8 +98,8 @@ function ScoreCard({ entry, pulse }: { entry: LiveMatchEntry; pulse: boolean }) 
               </div>
             ))}
           </div>
-          <div className="side-names align-right">
-          {sideBLabel}
+          <div className="side-names align-left">
+            {sideBLabel}
           </div>
         </div>
       </div>
@@ -512,8 +512,8 @@ export function LivePage() {
           align-items: center;
           gap: 0.75rem;
         }
-        .side-a { flex-direction: row; }
-        .side-b { flex-direction: row-reverse; }
+        .side-a { flex-direction: row; justify-content: flex-end; }
+        .side-b { flex-direction: row; justify-content: flex-start; }
         .side.winner .player-name {
           color: #fbbf24;
         }
@@ -526,6 +526,7 @@ export function LivePage() {
           min-width: 0;
         }
         .side-names.align-right { text-align: right; }
+        .side-names.align-left { text-align: left; }
         .player-name {
           font-size: 0.9rem;
           font-weight: 600;

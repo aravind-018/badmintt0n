@@ -100,7 +100,7 @@ function TvScorePanel({ entry, flashId }: { entry: LiveMatchEntry; flashId: stri
           <div className={`tv-score ${sideBLeading ? 'tv-score-leading' : ''}`}>
             {sideBScore}
           </div>
-          <div className="tv-player-names tv-names-right">
+          <div className="tv-player-names tv-names-left">
             <div className="tv-player-name">{sideBLabel}</div>
           </div>
         </div>
@@ -451,8 +451,8 @@ export function TvPage() {
           gap: 1rem;
           min-width: 0;
         }
-        .tv-side-a { flex-direction: row; }
-        .tv-side-b { flex-direction: row-reverse; }
+        .tv-side-a { flex-direction: row; justify-content: flex-end; }
+        .tv-side-b { flex-direction: row; justify-content: flex-start; }
         .tv-winner .tv-player-name { color: #fbbf24; }
 
         .tv-player-names {
@@ -463,6 +463,7 @@ export function TvPage() {
           gap: 0.2rem;
         }
         .tv-names-right { text-align: right; }
+        .tv-names-left { text-align: left; }
         .tv-player-name {
           font-size: clamp(1rem, 2.5vw, 1.6rem);
           font-weight: 700;
