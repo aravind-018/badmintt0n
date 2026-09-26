@@ -25,8 +25,8 @@ function getEnv(key: string, defaultValue: string): string {
 export const env = {
   NODE_ENV: getEnv('NODE_ENV', 'development'),
   PORT: parseInt(getEnv('PORT', '4000'), 10),
-  DATABASE_URL: requireEnv('DATABASE_URL'),
-  CORS_ORIGIN: getEnv('CORS_ORIGIN', 'http://localhost:5173'),
+  DATABASE_URL: getEnv('DATABASE_URL', process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL || ''),
+  CORS_ORIGIN: getEnv('CORS_ORIGIN', '*'),
   JWT_SECRET: getEnv('JWT_SECRET', 'dev-secret-change-in-production'),
   JWT_REFRESH_SECRET: getEnv('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-in-production'),
   JWT_EXPIRES_IN: getEnv('JWT_EXPIRES_IN', '15m'),
