@@ -63,7 +63,26 @@ export function useLiveMatches() {
     setMatches((prev) => prev.filter((m) => m.match.id !== matchId));
   }, []);
 
+  const fetchRestLive = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/live');
+      if (res.ok) {
+        const json = await res.json();
+        setMatches(json.matches || []);
+        setConnected(true);
+        setError(null);
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
+    // Perform immediate REST fetch on mount for instant data display
+    fetchRestLive();
+
     const socket = getSocket();
 
     // Connection tracking
@@ -74,12 +93,13 @@ export function useLiveMatches() {
     };
 
     const onDisconnect = () => {
-      setConnected(false);
+      // Do not set error; polling interval will maintain live score updates
     };
 
     const onConnectError = (err: Error) => {
-      setError(`Connection failed: ${err.message}`);
-      setConnected(false);
+      // Log socket warning but maintain live polling without blocking the screen
+      console.warn('[Socket.IO] Real-time socket unavailable, falling back to live REST polling:', err.message);
+      fetchRestLive();
     };
 
     // Live lobby snapshot — initial full list on join
@@ -103,7 +123,6 @@ export function useLiveMatches() {
 
     const onMatchCompleted = (data: LiveMatchEntry) => {
       if (data?.match?.id) {
-        // Keep completed matches briefly, then remove after 30s
         upsertMatch(data);
         setTimeout(() => removeMatch(data.match.id), 30000);
       }
@@ -128,31 +147,20 @@ export function useLiveMatches() {
     socket.on('match:paused', onMatchPaused);
     socket.on('match:resumed', onMatchResumed);
 
-    // Connect and join live if already connected
     if (socket.connected) {
       setConnected(true);
       socket.emit('join:live');
     }
 
-    // Fallback: REST fetch if socket snapshot is slow
-    const fallbackTimer = setTimeout(async () => {
-      if (loading) {
-        try {
-          const res = await fetch('/api/v1/live');
-          if (res.ok) {
-            const json = await res.json();
-            setMatches(json.matches || []);
-          }
-        } catch {
-          // silently ignore, socket will recover
-        } finally {
-          setLoading(false);
-        }
+    // Set up periodic REST polling (every 3 seconds) for environments without WebSockets (e.g. Vercel Serverless)
+    const pollInterval = setInterval(() => {
+      if (!socket.connected) {
+        fetchRestLive();
       }
-    }, 2000);
+    }, 3000);
 
     return () => {
-      clearTimeout(fallbackTimer);
+      clearInterval(pollInterval);
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('connect_error', onConnectError);
@@ -163,7 +171,7 @@ export function useLiveMatches() {
       socket.off('match:paused', onMatchPaused);
       socket.off('match:resumed', onMatchResumed);
     };
-  }, [upsertMatch, removeMatch]);
+  }, [upsertMatch, removeMatch, fetchRestLive]);
 
   return { matches, connected, loading, error };
 }

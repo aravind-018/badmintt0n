@@ -16,12 +16,11 @@ export function getSocket(): Socket {
     socket = io(SOCKET_URL, {
       autoConnect: true,
       reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      randomizationFactor: 0.5,
-      transports: ['websocket', 'polling'],
-      timeout: 10000,
+      reconnectionAttempts: 3,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 10000,
+      transports: ['polling', 'websocket'],
+      timeout: 5000,
     });
 
     socket.on('connect', () => {
