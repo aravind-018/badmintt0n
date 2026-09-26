@@ -626,8 +626,19 @@ export function LivePage() {
           .live-header { padding: 1.75rem 1rem 0.75rem; }
           .live-main { padding: 0.75rem 0.875rem 3rem; }
           .score-grid { grid-template-columns: 1fr; }
-          .player-name { font-size: 0.825rem; }
-          .score-card { padding: 1rem; }
+          .score-card { padding: 0.875rem 1rem; }
+          .score-board { gap: 0.5rem; }
+          .side { gap: 0.4rem; }
+          .player-name {
+            font-size: 0.8rem;
+            white-space: normal;
+            line-height: 1.2;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            word-break: break-word;
+          }
           .game-score { width: 32px; height: 32px; font-size: 1rem; }
           .game-score.current-game { font-size: 1.15rem; }
         }

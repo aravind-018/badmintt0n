@@ -677,7 +677,20 @@ export const HomePage: React.FC = () => {
           .home-hero-title { font-size: 2rem; }
           .home-hero-actions { flex-direction: column; width: 100%; }
           .home-cta-primary, .home-cta-secondary { width: 100%; text-align: center; justify-content: center; }
-          .hlc-pts { font-size: 1.5rem; }
+          .hlc-score { gap: 0.35rem; }
+          .hlc-side { gap: 0.25rem; }
+          .hlc-name {
+            font-size: 0.775rem;
+            white-space: normal;
+            line-height: 1.2;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            word-break: break-word;
+          }
+          .hlc-pts { font-size: 1.4rem; }
+          .hlc-set-info { font-size: 0.85rem; }
           .result-row { grid-template-columns: 1fr auto 1fr; gap: 0.35rem; padding: 0.75rem 0.6rem; }
           .result-name { font-size: 0.8rem; }
         }
