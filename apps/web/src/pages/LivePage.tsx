@@ -382,7 +382,7 @@ export function LivePage() {
         /* ── Grid ── */
         .score-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
           gap: 1.25rem;
         }
 
@@ -616,12 +616,20 @@ export function LivePage() {
         .live-error span { font-size: 2rem; }
         .live-error p { color: #fca5a5; }
 
+        @media (max-width: 768px) {
+          .live-nav { padding: 0 1rem; height: auto; min-height: 56px; flex-wrap: wrap; gap: 0.5rem; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+          .live-nav-actions { gap: 0.5rem; flex-wrap: wrap; }
+          .nav-link-secondary { display: none; }
+        }
+
         @media (max-width: 640px) {
-          .live-nav { padding: 0 1rem; }
-          .live-header { padding: 2rem 1rem 1rem; }
-          .live-main { padding: 1rem 1rem 3rem; }
+          .live-header { padding: 1.75rem 1rem 0.75rem; }
+          .live-main { padding: 0.75rem 0.875rem 3rem; }
           .score-grid { grid-template-columns: 1fr; }
-          .player-name { font-size: 0.8rem; }
+          .player-name { font-size: 0.825rem; }
+          .score-card { padding: 1rem; }
+          .game-score { width: 32px; height: 32px; font-size: 1rem; }
+          .game-score.current-game { font-size: 1.15rem; }
         }
       `}</style>
     </div>

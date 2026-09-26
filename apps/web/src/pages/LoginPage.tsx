@@ -69,7 +69,7 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {/* Login Card */}
-        <div className="glass-card p-8 rounded-2xl shadow-2xl border border-slate-700/50 space-y-6">
+        <div className="glass-card p-5 sm:p-8 rounded-2xl shadow-2xl border border-slate-700/50 space-y-6">
           {error && (
             <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-sm flex items-start gap-3">
               <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />

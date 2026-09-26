@@ -280,24 +280,31 @@ export const PublicNav: React.FC<{ liveCount?: number }> = ({ liveCount = 0 }) =
         }
         .tv-pill:hover { opacity: 0.8; }
 
-        /* Hamburger */
+        /* Mobile hamburger */
         .pub-menu-btn {
           display: none;
           flex-direction: column;
+          justify-content: center;
+          align-items: center;
           gap: 5px;
+          min-width: 44px;
+          min-height: 44px;
           padding: 0.5rem;
-          background: none;
-          border: none;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 10px;
           cursor: pointer;
           margin-left: auto;
+          transition: background 0.15s;
         }
+        .pub-menu-btn:hover { background: rgba(255,255,255,0.1); }
         .pub-menu-btn span {
           display: block;
           width: 22px;
           height: 2px;
-          background: rgba(255,255,255,0.7);
+          background: rgba(255,255,255,0.85);
           border-radius: 2px;
-          transition: 0.2s;
+          transition: transform 0.2s, opacity 0.2s;
         }
 
         /* Mobile menu */
@@ -305,22 +312,30 @@ export const PublicNav: React.FC<{ liveCount?: number }> = ({ liveCount = 0 }) =
           display: flex;
           flex-direction: column;
           background: rgba(10,10,26,0.98);
-          border-top: 1px solid rgba(255,255,255,0.07);
-          padding: 0.5rem 1rem 1rem;
+          border-top: 1px solid rgba(255,255,255,0.08);
+          padding: 0.75rem 1rem 1.25rem;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
         .pub-mobile-link {
           display: flex;
           align-items: center;
-          gap: 0.5rem;
-          padding: 0.75rem 0.5rem;
-          font-size: 0.95rem;
+          gap: 0.6rem;
+          padding: 0.85rem 0.75rem;
+          font-size: 1rem;
           font-weight: 500;
-          color: rgba(255,255,255,0.7);
+          color: rgba(255,255,255,0.8);
           text-decoration: none;
           border-bottom: 1px solid rgba(255,255,255,0.05);
+          border-radius: 8px;
+          transition: background 0.15s, color 0.15s;
+          min-height: 44px;
         }
         .pub-mobile-link:last-child { border-bottom: none; }
-        .pub-mobile-link.active { color: #fff; font-weight: 600; }
+        .pub-mobile-link:hover, .pub-mobile-link.active {
+          color: #fff;
+          background: rgba(255,255,255,0.08);
+          font-weight: 600;
+        }
 
         @media (max-width: 768px) {
           .pub-nav-links { display: none; }
@@ -357,7 +372,7 @@ export const PublicLayout: React.FC<{
 
     <style>{`
       *, *::before, *::after { box-sizing: border-box; }
-      html { scroll-behavior: smooth; }
+      html { scroll-behavior: smooth; overflow-x: hidden; }
       .pub-shell {
         min-height: 100vh;
         background: #0a0a1a;
@@ -365,12 +380,15 @@ export const PublicLayout: React.FC<{
         font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
         display: flex;
         flex-direction: column;
+        overflow-x: hidden;
+        width: 100%;
       }
-      .pub-main { flex: 1; }
+      .pub-main { flex: 1; width: 100%; overflow-x: hidden; }
       .pub-footer {
         border-top: 1px solid rgba(255,255,255,0.06);
         padding: 1.5rem 1.25rem;
         margin-top: 3rem;
+        width: 100%;
       }
       .pub-footer-inner {
         max-width: 1280px;
@@ -386,34 +404,40 @@ export const PublicLayout: React.FC<{
         margin-left: auto;
         display: flex;
         gap: 1rem;
+        flex-wrap: wrap;
       }
       .pub-footer-links a {
-        color: rgba(255,255,255,0.3);
+        color: rgba(255,255,255,0.4);
         text-decoration: none;
         transition: color 0.15s;
+        min-height: 36px;
+        display: inline-flex;
+        align-items: center;
       }
-      .pub-footer-links a:hover { color: rgba(255,255,255,0.6); }
+      .pub-footer-links a:hover { color: rgba(255,255,255,0.8); }
 
       /* Shared utility classes */
       .pub-container {
         max-width: 1280px;
         margin: 0 auto;
         padding: 0 1.25rem;
+        width: 100%;
       }
       .pub-page-header {
-        padding: 2.5rem 0 1.5rem;
+        padding: 2.25rem 0 1.25rem;
         border-bottom: 1px solid rgba(255,255,255,0.06);
-        margin-bottom: 2rem;
+        margin-bottom: 1.75rem;
       }
       .pub-page-title {
-        font-size: clamp(1.5rem, 4vw, 2.25rem);
+        font-size: clamp(1.35rem, 4.5vw, 2.25rem);
         font-weight: 800;
         color: #fff;
         margin: 0 0 0.35rem;
         letter-spacing: -0.02em;
+        word-break: break-word;
       }
       .pub-page-subtitle {
-        font-size: 0.9rem;
+        font-size: clamp(0.8rem, 2.5vw, 0.95rem);
         color: rgba(255,255,255,0.45);
         margin: 0;
       }

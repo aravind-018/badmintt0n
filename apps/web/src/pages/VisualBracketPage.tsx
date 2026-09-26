@@ -42,30 +42,30 @@ export const VisualBracketPage: React.FC = () => {
   const finals = matches.filter((m) => m.round === 'Final');
 
   return (
-    <div className="min-h-screen bg-dark-900 text-slate-100 flex flex-col">
+    <div className="min-h-screen bg-dark-900 text-slate-100 flex flex-col overflow-x-hidden">
       {/* Navbar */}
       <header className="border-b border-slate-800 bg-dark-800/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[64px] py-2 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link to="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-accent-emerald flex items-center justify-center glow-green">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-accent-emerald flex items-center justify-center glow-green shrink-0">
                 <Trophy className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold font-sans tracking-tight text-white flex items-center gap-2">
+                <h1 className="text-lg sm:text-xl font-bold font-sans tracking-tight text-white flex items-center gap-2">
                   Badminton Live
                 </h1>
-                <p className="text-xs text-slate-400">Interactive Visual Tournament Bracket</p>
+                <p className="text-[11px] sm:text-xs text-slate-400">Interactive Visual Tournament Bracket</p>
               </div>
             </Link>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <Link
               to="/fixtures"
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-dark-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-300 transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-300 transition"
             >
-              <Calendar className="w-4 h-4 text-brand-500" /> Full Fixtures List
+              <Calendar className="w-3.5 h-3.5 text-brand-500" /> <span className="hidden sm:inline">Full Fixtures List</span><span className="sm:hidden">Fixtures</span>
             </Link>
             <Link
               to="/login"

@@ -262,7 +262,11 @@ export const MatchDetailPage: React.FC = () => {
         .event-time { color: rgba(255,255,255,0.3); font-size: 0.75rem; }
 
         @media (max-width: 640px) {
-          .match-scoreboard { grid-template-columns: 1fr; gap: 1.5rem; }
+          .match-scoreboard { grid-template-columns: 1fr; gap: 1.25rem; }
+          .side-name { font-size: 1.15rem; }
+          .side-avatar { width: 48px; height: 48px; font-size: 1.4rem; }
+          .event-row { gap: 0.5rem; font-size: 0.8rem; flex-wrap: wrap; }
+          .event-seq { width: auto; }
         }
       `}</style>
     </PublicLayout>

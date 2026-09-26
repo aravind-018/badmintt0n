@@ -635,7 +635,7 @@ export const HomePage: React.FC = () => {
         /* Tournaments */
         .tournaments-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
           gap: 1rem;
         }
         .tournament-card {
@@ -660,6 +660,7 @@ export const HomePage: React.FC = () => {
           gap: 0.75rem;
           font-size: 0.7rem;
           color: rgba(255,255,255,0.3);
+          flex-wrap: wrap;
         }
 
         @media (max-width: 768px) {
@@ -669,6 +670,16 @@ export const HomePage: React.FC = () => {
           .home-live-grid { grid-template-columns: 1fr; }
           .upcoming-row { grid-template-columns: 70px 1fr; }
           .upcoming-meta { display: none; }
+          .tournaments-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 480px) {
+          .home-hero-title { font-size: 2rem; }
+          .home-hero-actions { flex-direction: column; width: 100%; }
+          .home-cta-primary, .home-cta-secondary { width: 100%; text-align: center; justify-content: center; }
+          .hlc-pts { font-size: 1.5rem; }
+          .result-row { grid-template-columns: 1fr auto 1fr; gap: 0.35rem; padding: 0.75rem 0.6rem; }
+          .result-name { font-size: 0.8rem; }
         }
       `}</style>
     </PublicLayout>

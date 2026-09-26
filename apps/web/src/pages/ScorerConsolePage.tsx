@@ -268,25 +268,27 @@ export const ScorerConsolePage: React.FC = () => {
             </div>
           )}
 
-          {/* Primary Scoring Touch Pad Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1">
+          {/* Primary Scoring Touch Pad Grid (2 Columns on mobile for one-hand access without vertical scrolling) */}
+          <div className="grid grid-cols-2 gap-2 sm:gap-4 flex-1 items-stretch">
             {/* SIDE A CARD */}
             <div
-              className={`bg-slate-900/60 p-6 rounded-3xl flex flex-col justify-between border-2 transition-all duration-300 ${
+              className={`bg-slate-900/80 p-3 sm:p-5 rounded-2xl sm:rounded-3xl flex flex-col justify-between border-2 transition-all duration-200 select-none ${
                 scoringState?.winner === 'A'
                   ? 'border-emerald-500 bg-emerald-500/10'
                   : 'border-slate-800 hover:border-indigo-500/50'
               }`}
             >
-              <div className="text-center space-y-1">
-                <div className="text-xs font-bold text-indigo-400 uppercase tracking-wider">SIDE A</div>
-                <h2 className="text-2xl sm:text-3xl font-black text-white truncate">{matchData.sideAName}</h2>
-                <div className="text-xs text-slate-400">Games Won: {scoringState?.sideAGamesWon || 0}</div>
+              <div className="text-center space-y-0.5">
+                <div className="text-[10px] sm:text-xs font-bold text-indigo-400 uppercase tracking-wider">SIDE A</div>
+                <h2 className="text-sm sm:text-2xl font-extrabold text-white truncate" title={matchData.sideAName}>
+                  {matchData.sideAName}
+                </h2>
+                <div className="text-[10px] sm:text-xs text-slate-400 font-medium">Sets: {scoringState?.sideAGamesWon || 0}</div>
               </div>
 
               {/* Big Score Display */}
-              <div className="my-6 text-center">
-                <div className="text-7xl sm:text-8xl font-black font-mono tracking-tight text-white drop-shadow-lg">
+              <div className="my-2 sm:my-4 text-center">
+                <div className="text-5xl sm:text-7xl md:text-8xl font-black font-mono tracking-tight text-white drop-shadow-md">
                   {currentGame.sideAPoints}
                 </div>
               </div>
@@ -295,29 +297,31 @@ export const ScorerConsolePage: React.FC = () => {
               <button
                 onClick={() => handleScoringEvent('POINT_SIDE_A', 'A')}
                 disabled={actionLoading || isMatchComplete}
-                className="w-full py-6 rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white font-extrabold text-xl shadow-2xl active:scale-95 transition disabled:opacity-40 disabled:pointer-events-none select-none"
+                className="w-full py-4 sm:py-6 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 active:from-indigo-700 active:to-indigo-600 text-white font-black text-sm sm:text-xl shadow-xl active:scale-95 transition disabled:opacity-40 disabled:pointer-events-none select-none touch-manipulation min-h-[54px]"
               >
-                +1 POINT ({matchData.sideAName})
+                +1 POINT
               </button>
             </div>
 
             {/* SIDE B CARD */}
             <div
-              className={`bg-slate-900/60 p-6 rounded-3xl flex flex-col justify-between border-2 transition-all duration-300 ${
+              className={`bg-slate-900/80 p-3 sm:p-5 rounded-2xl sm:rounded-3xl flex flex-col justify-between border-2 transition-all duration-200 select-none ${
                 scoringState?.winner === 'B'
                   ? 'border-emerald-500 bg-emerald-500/10'
                   : 'border-slate-800 hover:border-cyan-500/50'
               }`}
             >
-              <div className="text-center space-y-1">
-                <div className="text-xs font-bold text-cyan-400 uppercase tracking-wider">SIDE B</div>
-                <h2 className="text-2xl sm:text-3xl font-black text-white truncate">{matchData.sideBName}</h2>
-                <div className="text-xs text-slate-400">Games Won: {scoringState?.sideBGamesWon || 0}</div>
+              <div className="text-center space-y-0.5">
+                <div className="text-[10px] sm:text-xs font-bold text-cyan-400 uppercase tracking-wider">SIDE B</div>
+                <h2 className="text-sm sm:text-2xl font-extrabold text-white truncate" title={matchData.sideBName}>
+                  {matchData.sideBName}
+                </h2>
+                <div className="text-[10px] sm:text-xs text-slate-400 font-medium">Sets: {scoringState?.sideBGamesWon || 0}</div>
               </div>
 
               {/* Big Score Display */}
-              <div className="my-6 text-center">
-                <div className="text-7xl sm:text-8xl font-black font-mono tracking-tight text-white drop-shadow-lg">
+              <div className="my-2 sm:my-4 text-center">
+                <div className="text-5xl sm:text-7xl md:text-8xl font-black font-mono tracking-tight text-white drop-shadow-md">
                   {currentGame.sideBPoints}
                 </div>
               </div>
@@ -326,55 +330,55 @@ export const ScorerConsolePage: React.FC = () => {
               <button
                 onClick={() => handleScoringEvent('POINT_SIDE_B', 'B')}
                 disabled={actionLoading || isMatchComplete}
-                className="w-full py-6 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-extrabold text-xl shadow-2xl active:scale-95 transition disabled:opacity-40 disabled:pointer-events-none select-none"
+                className="w-full py-4 sm:py-6 rounded-xl sm:rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 active:from-cyan-700 active:to-blue-700 text-white font-black text-sm sm:text-xl shadow-xl active:scale-95 transition disabled:opacity-40 disabled:pointer-events-none select-none touch-manipulation min-h-[54px]"
               >
-                +1 POINT ({matchData.sideBName})
+                +1 POINT
               </button>
             </div>
           </div>
 
           {/* Controls Footer Toolbar */}
-          <div className="bg-slate-900 p-4 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-bold border border-slate-800">
+          <div className="bg-slate-900 p-2.5 sm:p-4 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-xs font-bold border border-slate-800">
             <button
               onClick={() => handleScoringEvent('UNDO')}
               disabled={actionLoading}
-              className="py-3 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-200 flex items-center justify-center gap-2 transition"
+              className="py-2.5 sm:py-3 px-3 rounded-xl bg-slate-950 hover:bg-slate-800 active:bg-slate-900 border border-slate-800 text-slate-200 flex items-center justify-center gap-1.5 transition touch-manipulation min-h-[44px]"
             >
-              <RotateCcw className="w-4 h-4 text-amber-400" /> UNDO LAST POINT
+              <RotateCcw className="w-4 h-4 text-amber-400 shrink-0" /> <span>UNDO LAST</span>
             </button>
 
             {scoringState?.status === 'PAUSED' ? (
               <button
                 onClick={() => handleScoringEvent('RESUME')}
                 disabled={actionLoading}
-                className="py-3 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-indigo-400 flex items-center justify-center gap-2 transition"
+                className="py-2.5 sm:py-3 px-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-indigo-400 flex items-center justify-center gap-1.5 transition touch-manipulation min-h-[44px]"
               >
-                <Play className="w-4 h-4" /> RESUME MATCH
+                <Play className="w-4 h-4 shrink-0" /> <span>RESUME</span>
               </button>
             ) : (
               <button
                 onClick={() => handleScoringEvent('PAUSE')}
                 disabled={actionLoading || isMatchComplete}
-                className="py-3 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-amber-400 flex items-center justify-center gap-2 transition"
+                className="py-2.5 sm:py-3 px-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-amber-400 flex items-center justify-center gap-1.5 transition touch-manipulation min-h-[44px]"
               >
-                <Pause className="w-4 h-4" /> PAUSE MATCH
+                <Pause className="w-4 h-4 shrink-0" /> <span>PAUSE</span>
               </button>
             )}
 
             <button
               onClick={() => handleScoringEvent('WALKOVER', 'A')}
               disabled={actionLoading || isMatchComplete}
-              className="py-3 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 flex items-center justify-center gap-2 transition text-[11px]"
+              className="py-2.5 sm:py-3 px-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 flex items-center justify-center gap-1.5 transition text-[11px] touch-manipulation min-h-[44px]"
             >
-              <Flag className="w-4 h-4 text-rose-400" /> WALKOVER / RETIRE
+              <Flag className="w-4 h-4 text-rose-400 shrink-0" /> <span>WALKOVER</span>
             </button>
 
             <button
               onClick={() => handleScoringEvent('COMPLETE')}
               disabled={actionLoading || isMatchComplete}
-              className="py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center gap-2 transition shadow-lg"
+              className="py-2.5 sm:py-3 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white flex items-center justify-center gap-1.5 transition shadow-lg touch-manipulation min-h-[44px]"
             >
-              <CheckCircle2 className="w-4 h-4" /> FINISH MATCH
+              <CheckCircle2 className="w-4 h-4 shrink-0" /> <span>FINISH MATCH</span>
             </button>
           </div>
         </main>
