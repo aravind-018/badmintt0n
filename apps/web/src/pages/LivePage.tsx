@@ -36,9 +36,14 @@ function ScoreCard({ entry, pulse }: { entry: LiveMatchEntry; pulse: boolean }) 
   const statusClass = getStatusColor(match.status);
   const statusLabel = getStatusLabel(match.status);
 
+  const sideAScore = currentGame?.sideAPoints ?? 0;
+  const sideBScore = currentGame?.sideBPoints ?? 0;
+  const sideALeading = sideAScore > sideBScore;
+  const sideBLeading = sideBScore > sideAScore;
+
   return (
     <div className={`score-card ${statusClass} ${pulse ? 'pulse' : ''}`}>
-      {/* Header */}
+      {/* Card Header */}
       <div className="score-card-header">
         <div className="score-card-meta">
           <span className="court-badge">{match.court?.name || 'Court —'}</span>
@@ -53,28 +58,20 @@ function ScoreCard({ entry, pulse }: { entry: LiveMatchEntry; pulse: boolean }) 
         </div>
       </div>
 
-      {/* Score Board */}
+      {/* Main Score Board */}
       <div className="score-board">
         {/* Side A */}
         <div className={`side side-a ${state.winner === 'A' ? 'winner' : ''}`}>
           <div className="side-names align-right">
-            {sideALabel}
+            <span className="player-name">{sideALabel}</span>
           </div>
-          <div className="game-scores">
-            {state.games.map((g, i) => (
-              <div
-                key={i}
-                className={`game-score ${i === state.currentGameNumber - 1 && !state.isMatchComplete ? 'current-game' : ''}`}
-              >
-                {g.sideAPoints}
-              </div>
-            ))}
+          <div className={`main-pts ${sideALeading ? 'leading' : ''}`}>
+            {sideAScore}
           </div>
         </div>
 
-        {/* VS Divider */}
+        {/* Center Divider */}
         <div className="vs-divider">
-          <span>vs</span>
           <div className="games-summary">
             <span className={`games-won ${state.sideAGamesWon > state.sideBGamesWon ? 'leading' : ''}`}>
               {state.sideAGamesWon}
@@ -84,48 +81,59 @@ function ScoreCard({ entry, pulse }: { entry: LiveMatchEntry; pulse: boolean }) 
               {state.sideBGamesWon}
             </span>
           </div>
+          <span className="sets-label">SETS</span>
+          {!state.isMatchComplete && (
+            <span className="current-game-tag">Game {state.currentGameNumber}</span>
+          )}
         </div>
 
         {/* Side B */}
         <div className={`side side-b ${state.winner === 'B' ? 'winner' : ''}`}>
-          <div className="game-scores">
-            {state.games.map((g, i) => (
-              <div
-                key={i}
-                className={`game-score ${i === state.currentGameNumber - 1 && !state.isMatchComplete ? 'current-game' : ''}`}
-              >
-                {g.sideBPoints}
-              </div>
-            ))}
+          <div className={`main-pts ${sideBLeading ? 'leading' : ''}`}>
+            {sideBScore}
           </div>
           <div className="side-names align-left">
-            {sideBLabel}
+            <span className="player-name">{sideBLabel}</span>
           </div>
         </div>
       </div>
 
+      {/* Sets Breakdown Strip */}
+      {state.games && state.games.length > 0 && (
+        <div className="sets-breakdown">
+          {state.games.map((g, i) => (
+            <div
+              key={i}
+              className={`set-pill ${i === state.currentGameNumber - 1 && !state.isMatchComplete ? 'active' : ''}`}
+            >
+              <span className="set-num">G{g.gameNumber}:</span>
+              <span className={g.winner === 'A' || g.sideAPoints > g.sideBPoints ? 'pts-win' : ''}>{g.sideAPoints}</span>
+              <span className="set-dash">-</span>
+              <span className={g.winner === 'B' || g.sideBPoints > g.sideAPoints ? 'pts-win' : ''}>{g.sideBPoints}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Footer & Serving Status */}
       <div className="score-card-footer">
         {state.isMatchComplete && state.winner && (
-          <span className="winner-label">
-            🏆 {state.winner === 'A' ? sideALabel : sideBLabel} wins
-          </span>
+          <div className="winner-banner">
+            🏆 <strong>{state.winner === 'A' ? sideALabel : sideBLabel}</strong> wins the match!
+          </div>
         )}
-        {!state.isMatchComplete && currentGame && (
-          <div className="flex flex-col gap-1">
-            <span className="game-label">
-              Game {state.currentGameNumber} · {currentGame.sideAPoints}–{currentGame.sideBPoints}
-            </span>
-            {state.servingState && match.status === 'LIVE' && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginTop: '0.35rem', padding: '0.4rem 0.6rem', borderRadius: '8px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', fontSize: '0.75rem' }}>
-                <span style={{ color: '#fef08a', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  🏸 {state.servingState.serverName} ({state.servingState.servingTeamName})
-                </span>
-                <span style={{ color: '#34d399', fontWeight: 700, padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(52,211,153,0.15)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  Court: {state.servingState.serviceCourt}
-                </span>
-              </div>
-            )}
+        {!state.isMatchComplete && state.servingState && match.status === 'LIVE' && (
+          <div className="serving-strip">
+            <div className="server-info">
+              <span className="shuttle-icon">🏸</span>
+              <span className="server-text">
+                <strong>SERVER:</strong> {state.servingState.serverName} ({state.servingState.servingTeamName})
+              </span>
+            </div>
+            <div className="court-info">
+              <span className="court-label">COURT:</span>
+              <span className="court-value">{state.servingState.serviceCourt}</span>
+            </div>
           </div>
         )}
       </div>
@@ -139,22 +147,7 @@ function ScoreCard({ entry, pulse }: { entry: LiveMatchEntry; pulse: boolean }) 
 
 export function LivePage() {
   const { matches, connected, loading, error } = useLiveMatches();
-  const [pulsingIds, setPulsingIds] = useState<Set<string>>(new Set());
-
-  // Track which cards to pulse when score updates
-  const handleScoreUpdate = (matchId: string) => {
-    setPulsingIds((prev) => new Set(prev).add(matchId));
-    setTimeout(() => {
-      setPulsingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(matchId);
-        return next;
-      });
-    }, 600);
-  };
-
-  // Pass pulse trigger down — since state is managed in hook, we pulse based on match updates
-  // We'll simplify by not needing explicit pulse tracking (the CSS animation is on data-change)
+  const [pulsingIds] = useState<Set<string>>(new Set());
 
   const inProgress = matches.filter((m) => m.match.status === 'LIVE');
   const paused = matches.filter((m) => m.match.status === 'PAUSED');
@@ -360,7 +353,7 @@ export function LivePage() {
           font-size: 0.95rem;
         }
 
-        /* ── Main ── */
+        /* ── Main Container ── */
         .live-main {
           max-width: 1400px;
           margin: 0 auto;
@@ -394,20 +387,26 @@ export function LivePage() {
         /* ── Grid ── */
         .score-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 1.25rem;
+          grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+          gap: 1.5rem;
+          align-items: stretch;
         }
 
         /* ── Score Card ── */
         .score-card {
-          background: rgba(255,255,255,0.07);
-          border: 1px solid rgba(255,255,255,0.1);
-          border-radius: 16px;
-          padding: 1.25rem;
-          backdrop-filter: blur(10px);
-          transition: transform 0.2s, box-shadow 0.2s;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 20px;
+          padding: 1.35rem 1.5rem;
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
           position: relative;
           overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
         }
         .score-card::before {
           content: '';
@@ -428,8 +427,9 @@ export function LivePage() {
           background: linear-gradient(90deg, #22c55e, #16a34a);
         }
         .score-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+          transform: translateY(-3px);
+          border-color: rgba(255, 255, 255, 0.22);
+          box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.5), 0 0 20px rgba(167, 139, 250, 0.12);
         }
         .score-card.pulse {
           animation: scorePulse 0.5s ease;
@@ -440,56 +440,72 @@ export function LivePage() {
           100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
         }
 
-        /* Card header */
+        /* ── Header ── */
         .score-card-header {
           display: flex;
           justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 1rem;
+          align-items: center;
+          margin-bottom: 1.25rem;
+          gap: 0.5rem;
         }
         .score-card-meta {
           display: flex;
           flex-wrap: wrap;
+          align-items: center;
           gap: 0.4rem;
         }
         .court-badge, .category-badge, .round-badge {
-          font-size: 0.7rem;
-          font-weight: 600;
-          padding: 0.2rem 0.6rem;
-          border-radius: 100px;
-          background: rgba(255,255,255,0.1);
-          color: rgba(255,255,255,0.7);
-          text-transform: uppercase;
-          letter-spacing: 0.04em;
-        }
-        .court-badge { background: rgba(99,102,241,0.25); color: #a5b4fc; }
-
-        .status-badge {
-          font-size: 0.7rem;
+          font-size: 0.725rem;
           font-weight: 700;
-          padding: 0.25rem 0.7rem;
+          padding: 0.25rem 0.65rem;
+          border-radius: 100px;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          white-space: nowrap;
+        }
+        .court-badge {
+          background: rgba(99, 102, 241, 0.2);
+          border: 1px solid rgba(99, 102, 241, 0.35);
+          color: #c7d2fe;
+        }
+        .category-badge {
+          background: rgba(168, 85, 247, 0.18);
+          border: 1px solid rgba(168, 85, 247, 0.3);
+          color: #e9d5ff;
+        }
+        .round-badge {
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          color: rgba(255, 255, 255, 0.7);
+        }
+        .status-badge {
+          font-size: 0.725rem;
+          font-weight: 800;
+          padding: 0.25rem 0.75rem;
           border-radius: 100px;
           display: flex;
           align-items: center;
-          gap: 0.35rem;
+          gap: 0.4rem;
           text-transform: uppercase;
           letter-spacing: 0.06em;
           white-space: nowrap;
+          flex-shrink: 0;
         }
         .status-badge.live {
-          background: rgba(239,68,68,0.2);
+          background: rgba(239, 68, 68, 0.18);
           color: #fca5a5;
-          border: 1px solid rgba(239,68,68,0.3);
+          border: 1px solid rgba(239, 68, 68, 0.35);
+          box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
         }
         .status-badge.paused {
-          background: rgba(245,158,11,0.2);
+          background: rgba(245, 158, 11, 0.18);
           color: #fde68a;
-          border: 1px solid rgba(245,158,11,0.3);
+          border: 1px solid rgba(245, 158, 11, 0.35);
         }
         .status-badge.completed {
-          background: rgba(34,197,94,0.2);
+          background: rgba(34, 197, 94, 0.18);
           color: #86efac;
-          border: 1px solid rgba(34,197,94,0.3);
+          border: 1px solid rgba(34, 197, 94, 0.35);
         }
         .live-dot {
           width: 6px;
@@ -499,99 +515,196 @@ export function LivePage() {
           animation: connPulse 1s infinite;
         }
 
-        /* Score board layout */
+        /* ── Main Score Board ── */
         .score-board {
           display: flex;
           align-items: center;
-          gap: 0.75rem;
-          margin-bottom: 1rem;
+          gap: 1rem;
+          margin-bottom: 1.25rem;
         }
         .side {
           flex: 1;
           display: flex;
           align-items: center;
-          gap: 0.75rem;
+          gap: 0.85rem;
+          min-width: 0;
         }
         .side-a { flex-direction: row; justify-content: flex-end; }
         .side-b { flex-direction: row; justify-content: flex-start; }
-        .side.winner .player-name {
-          color: #fbbf24;
-        }
 
         .side-names {
           flex: 1;
           display: flex;
           flex-direction: column;
-          gap: 0.1rem;
+          gap: 0.15rem;
           min-width: 0;
         }
         .side-names.align-right { text-align: right; }
         .side-names.align-left { text-align: left; }
         .player-name {
-          font-size: 0.9rem;
-          font-weight: 600;
-          color: #e2e8f0;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .game-scores {
-          display: flex;
-          gap: 0.3rem;
-          flex-shrink: 0;
-        }
-        .game-score {
-          width: 36px;
-          height: 36px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1.1rem;
+          font-size: clamp(0.95rem, 1.8vw, 1.15rem);
           font-weight: 700;
-          border-radius: 8px;
-          background: rgba(255,255,255,0.08);
-          color: rgba(255,255,255,0.5);
+          color: #f8fafc;
+          line-height: 1.25;
+          word-break: break-word;
+          overflow: hidden;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
         }
-        .game-score.current-game {
-          background: rgba(99,102,241,0.3);
-          color: #fff;
-          font-size: 1.3rem;
+        .side.winner .player-name {
+          color: #fbbf24;
+          text-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
         }
 
+        .main-pts {
+          font-size: clamp(2.25rem, 4.5vw, 3.25rem);
+          font-weight: 900;
+          font-variant-numeric: tabular-nums;
+          color: rgba(255, 255, 255, 0.35);
+          line-height: 1;
+          flex-shrink: 0;
+          transition: color 0.2s;
+        }
+        .main-pts.leading {
+          color: #ffffff;
+          text-shadow: 0 0 24px rgba(167, 139, 250, 0.5);
+        }
+
+        /* Center Divider */
         .vs-divider {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 0.25rem;
+          justify-content: center;
+          gap: 0.15rem;
           flex-shrink: 0;
-        }
-        .vs-divider > span {
-          font-size: 0.7rem;
-          color: rgba(255,255,255,0.3);
-          font-weight: 600;
-          text-transform: uppercase;
+          padding: 0 0.25rem;
+          min-width: 70px;
         }
         .games-summary {
           display: flex;
           align-items: center;
-          gap: 0.2rem;
-          font-size: 0.85rem;
-          font-weight: 700;
+          gap: 0.3rem;
+          font-size: 1.15rem;
+          font-weight: 800;
+          font-variant-numeric: tabular-nums;
         }
-        .games-won { color: rgba(255,255,255,0.4); }
+        .games-won { color: rgba(255, 255, 255, 0.4); }
         .games-won.leading { color: #fbbf24; }
-        .games-dash { color: rgba(255,255,255,0.2); }
-
-        /* Card footer */
-        .score-card-footer {
-          border-top: 1px solid rgba(255,255,255,0.06);
-          padding-top: 0.75rem;
-          font-size: 0.8rem;
-          color: rgba(255,255,255,0.4);
+        .games-dash { color: rgba(255, 255, 255, 0.2); }
+        .sets-label {
+          font-size: 0.625rem;
+          font-weight: 800;
+          letter-spacing: 0.1em;
+          color: rgba(255, 255, 255, 0.3);
+          text-transform: uppercase;
         }
-        .winner-label { color: #fbbf24; font-weight: 600; }
-        .game-label { color: rgba(255,255,255,0.4); }
+        .current-game-tag {
+          font-size: 0.675rem;
+          font-weight: 700;
+          color: #a78bfa;
+          background: rgba(167, 139, 250, 0.15);
+          padding: 0.1rem 0.45rem;
+          border-radius: 4px;
+          margin-top: 0.2rem;
+          white-space: nowrap;
+        }
+
+        /* ── Sets Breakdown Strip ── */
+        .sets-breakdown {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+          flex-wrap: wrap;
+        }
+        .set-pill {
+          display: flex;
+          align-items: center;
+          gap: 0.3rem;
+          font-size: 0.775rem;
+          font-weight: 600;
+          padding: 0.25rem 0.6rem;
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.07);
+          color: rgba(255, 255, 255, 0.45);
+        }
+        .set-pill.active {
+          background: rgba(99, 102, 241, 0.15);
+          border-color: rgba(99, 102, 241, 0.3);
+          color: #c7d2fe;
+        }
+        .set-num { font-size: 0.7rem; color: rgba(255, 255, 255, 0.35); font-weight: 700; }
+        .set-dash { color: rgba(255, 255, 255, 0.2); }
+        .pts-win { color: #fbbf24; font-weight: 700; }
+
+        /* ── Serving & Footer Strip ── */
+        .score-card-footer {
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          padding-top: 0.85rem;
+        }
+        .winner-banner {
+          font-size: 0.875rem;
+          color: #fbbf24;
+          text-align: center;
+          font-weight: 600;
+          padding: 0.4rem;
+          background: rgba(251, 191, 36, 0.08);
+          border-radius: 8px;
+          border: 1px solid rgba(251, 191, 36, 0.2);
+        }
+        .serving-strip {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
+          padding: 0.5rem 0.75rem;
+          border-radius: 10px;
+          background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.05));
+          border: 1px solid rgba(245, 158, 11, 0.28);
+          font-size: 0.8rem;
+          flex-wrap: wrap;
+        }
+        .server-info {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          min-width: 0;
+          flex: 1;
+        }
+        .shuttle-icon { font-size: 0.9rem; flex-shrink: 0; }
+        .server-text {
+          color: #fef08a;
+          font-weight: 600;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .court-info {
+          display: flex;
+          align-items: center;
+          gap: 0.35rem;
+          flex-shrink: 0;
+          background: rgba(52, 211, 153, 0.15);
+          border: 1px solid rgba(52, 211, 153, 0.3);
+          padding: 0.2rem 0.55rem;
+          border-radius: 6px;
+        }
+        .court-label {
+          font-size: 0.675rem;
+          color: rgba(255, 255, 255, 0.6);
+          font-weight: 700;
+          text-transform: uppercase;
+        }
+        .court-value {
+          font-size: 0.775rem;
+          color: #34d399;
+          font-weight: 900;
+          letter-spacing: 0.04em;
+        }
 
         /* ── Empty / Loading ── */
         .live-loading, .live-error, .live-empty {
@@ -633,29 +746,59 @@ export function LivePage() {
           .live-nav { padding: 0 1rem; height: auto; min-height: 56px; flex-wrap: wrap; gap: 0.5rem; padding-top: 0.5rem; padding-bottom: 0.5rem; }
           .live-nav-actions { gap: 0.5rem; flex-wrap: wrap; }
           .nav-link-secondary { display: none; }
+          .score-grid {
+            grid-template-columns: 1fr;
+          }
+          .score-card {
+            padding: 1.1rem 1.15rem;
+          }
         }
 
-        @media (max-width: 640px) {
+        @media (max-width: 480px) {
           .live-header { padding: 1.75rem 1rem 0.75rem; }
           .live-main { padding: 0.75rem 0.875rem 3rem; }
-          .score-grid { grid-template-columns: 1fr; }
-          .score-card { padding: 0.875rem 1rem; }
-          .score-board { gap: 0.5rem; }
-          .side { gap: 0.4rem; }
+          .score-card {
+            padding: 1rem;
+            border-radius: 16px;
+          }
+          .score-board {
+            gap: 0.5rem;
+          }
+          .side {
+            gap: 0.4rem;
+          }
           .player-name {
-            font-size: 0.8rem;
+            font-size: 0.85rem;
+          }
+          .main-pts {
+            font-size: 2rem;
+          }
+          .vs-divider {
+            min-width: 54px;
+            padding: 0 0.1rem;
+          }
+          .games-summary {
+            font-size: 1rem;
+          }
+          .serving-strip {
+            padding: 0.45rem 0.6rem;
+            gap: 0.4rem;
+            flex-direction: column;
+            align-items: flex-start;
+          }
+          .server-info {
+            width: 100%;
+          }
+          .server-text {
             white-space: normal;
-            line-height: 1.2;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
             word-break: break-word;
           }
-          .game-score { width: 32px; height: 32px; font-size: 1rem; }
-          .game-score.current-game { font-size: 1.15rem; }
+          .court-info {
+            align-self: flex-start;
+          }
         }
       `}</style>
     </div>
   );
 }
+
