@@ -50,6 +50,33 @@ export const ScorerConsolePage: React.FC = () => {
     }
   };
 
+  const [selectedServerName, setSelectedServerName] = useState<string>('');
+
+  function getMatchPlayers(match: any): Array<{ name: string; side: 'A' | 'B'; teamName: string }> {
+    if (!match) return [];
+    const isDoubles = match.category?.type ? match.category.type.includes('DOUBLES') : false;
+    const result: Array<{ name: string; side: 'A' | 'B'; teamName: string }> = [];
+
+    const parseSide = (rawName: string | undefined, side: 'A' | 'B', defaultLabel: string) => {
+      const raw = (rawName || defaultLabel).trim();
+      if (isDoubles) {
+        const cleaned = raw.replace(/\s*\([^)]*\)\s*$/, '');
+        const parts = cleaned.split(/\s*[\/\&,]\s*/).filter(Boolean);
+        if (parts.length >= 2) {
+          parts.forEach((p) => result.push({ name: p.trim(), side, teamName: raw }));
+        } else {
+          result.push({ name: raw, side, teamName: raw });
+        }
+      } else {
+        result.push({ name: raw, side, teamName: raw });
+      }
+    };
+
+    parseSide(match.sideAName, 'A', 'Side A');
+    parseSide(match.sideBName, 'B', 'Side B');
+    return result;
+  }
+
   // Fetch match details & scoring state
   const fetchScoringState = async (mId: string) => {
     if (!mId) return;
@@ -59,6 +86,16 @@ export const ScorerConsolePage: React.FC = () => {
       const data = await res.json();
       setMatchData(data.match);
       setScoringState(data.state);
+
+      const savedServer = data.match?.currentGameState?.initialServerName || data.state?.servingState?.serverName;
+      if (savedServer) {
+        setSelectedServerName(savedServer);
+      } else {
+        const playersList = getMatchPlayers(data.match);
+        if (playersList.length > 0) {
+          setSelectedServerName(playersList[0].name);
+        }
+      }
     } catch (err) {
       showToast('Failed to load match scoring state', 'error');
     } finally {
@@ -76,9 +113,73 @@ export const ScorerConsolePage: React.FC = () => {
     }
   }, [selectedMatchId]);
 
+  const handleStartMatch = async () => {
+    if (!selectedServerName) {
+      showToast('Please select the starting server before starting the match.', 'error');
+      return;
+    }
+    const playersList = getMatchPlayers(matchData);
+    const chosenPlayer = playersList.find((p) => p.name === selectedServerName) || playersList[0];
+
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/v1/matches/${selectedMatchId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          status: 'LIVE',
+          initialServerName: chosenPlayer.name,
+          initialServingSide: chosenPlayer.side,
+        }),
+      });
+
+      if (res.ok) {
+        showToast(
+          `Match started! Starting server: ${chosenPlayer.name} (${
+            chosenPlayer.side === 'A' ? matchData?.sideAName : matchData?.sideBName
+          })`
+        );
+        fetchScoringState(selectedMatchId);
+        fetchMatches();
+      } else {
+        showToast('Failed to start match', 'error');
+      }
+    } catch (err) {
+      showToast('Error starting match', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Dispatch scoring event to backend
   const handleScoringEvent = async (type: string, side?: 'A' | 'B') => {
     if (!selectedMatchId || actionLoading) return;
+
+    // Validation: ensure initial server is selected before first point
+    if (matchData?.status === 'SCHEDULED' || matchData?.status === 'READY') {
+      if (!selectedServerName) {
+        showToast('Please select the starting server before starting the match.', 'error');
+        return;
+      }
+      // Save initial server first
+      const playersList = getMatchPlayers(matchData);
+      const chosenPlayer = playersList.find((p) => p.name === selectedServerName) || playersList[0];
+      await fetch(`/api/v1/matches/${selectedMatchId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          status: 'LIVE',
+          initialServerName: chosenPlayer.name,
+          initialServingSide: chosenPlayer.side,
+        }),
+      });
+    }
 
     setActionLoading(true);
     const requestId = 'req-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
@@ -281,18 +382,96 @@ export const ScorerConsolePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Scheduled / Completed Special Actions Notice */}
-          {isScheduled && (
-            <div className="bg-indigo-950/40 border border-indigo-500/30 p-4 rounded-2xl flex items-center justify-between">
-              <div className="text-xs text-indigo-300">
-                Match is scheduled. Click <strong>+1 Point</strong> or <strong>Start Match</strong> to begin live scoring.
+          {/* Match Setup & Starting Server Selection Panel */}
+          {(isScheduled || (scoringState?.status !== 'LIVE' && scoringState?.events?.length === 0)) && (
+            <div className="bg-slate-900/90 border border-amber-500/40 p-5 rounded-2xl space-y-4 shadow-xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-base font-extrabold text-white flex items-center gap-2">
+                    <Radio className="w-5 h-5 text-amber-400 animate-pulse" /> MATCH SETUP
+                  </h3>
+                  <p className="text-slate-400 text-xs mt-0.5">
+                    Select the starting server for the first rally before beginning live score recording
+                  </p>
+                </div>
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  STARTING SERVER REQUIRED
+                </span>
               </div>
-              <button
-                onClick={() => handleScoringEvent('POINT_SIDE_A', 'A')}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center gap-2"
-              >
-                <Play className="w-4 h-4" /> Start Match & Score
-              </button>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Team Details */}
+                <div className="space-y-2 text-xs bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400 font-medium">Team A:</span>
+                    <span className="font-bold text-white">{matchData?.sideAName}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t border-slate-800/80 pt-1.5">
+                    <span className="text-slate-400 font-medium">Team B:</span>
+                    <span className="font-bold text-white">{matchData?.sideBName}</span>
+                  </div>
+                </div>
+
+                {/* Starting Server Selection */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-amber-400 uppercase tracking-wider block">
+                    Starting Server <span className="text-rose-400">*</span>
+                  </label>
+                  <select
+                    value={selectedServerName}
+                    onChange={(e) => setSelectedServerName(e.target.value)}
+                    className="w-full py-2.5 px-3.5 rounded-xl bg-slate-950 border border-amber-500/50 text-white font-bold text-xs sm:text-sm focus:outline-none focus:border-amber-400 cursor-pointer"
+                  >
+                    <option value="">-- Select Starting Server --</option>
+                    {getMatchPlayers(matchData).map((p, idx) => (
+                      <option key={idx} value={p.name}>
+                        {p.name} ({p.side === 'A' ? matchData?.sideAName : matchData?.sideBName})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Initial Server Preview Bar */}
+              <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400 block text-[11px] font-medium">SERVING TEAM</span>
+                  <span className="font-extrabold text-white text-sm block mt-0.5">
+                    {selectedServerName ? (
+                      getMatchPlayers(matchData).find((p) => p.name === selectedServerName)?.side === 'A'
+                        ? matchData?.sideAName
+                        : matchData?.sideBName
+                    ) : (
+                      <span className="text-slate-500 font-normal italic">Select server above</span>
+                    )}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-slate-400 block text-[11px] font-medium">INITIAL SERVER</span>
+                  <span className="font-extrabold text-amber-400 text-sm block mt-0.5">
+                    {selectedServerName || 'None selected'}
+                  </span>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-slate-400 block text-[11px] font-medium">SERVICE COURT</span>
+                  <span className="font-black text-emerald-400 text-xs px-2.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 inline-block mt-0.5">
+                    RIGHT (0-0)
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <button
+                  onClick={handleStartMatch}
+                  disabled={actionLoading}
+                  className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-dark-900 font-extrabold text-sm rounded-xl shadow-lg glow-amber transition flex items-center justify-center gap-2"
+                >
+                  <Play className="w-5 h-5 fill-current" />
+                  <span>START MATCH</span>
+                </button>
+              </div>
             </div>
           )}
 

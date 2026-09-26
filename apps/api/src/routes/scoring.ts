@@ -33,10 +33,13 @@ function getMatchTargetPoints(match: any): number {
 
 function getMatchMetadata(match: any) {
   const isDoubles = match?.category?.type ? match.category.type.includes('DOUBLES') : false;
+  const gameState = match?.currentGameState && typeof match.currentGameState === 'object' ? match.currentGameState : {};
   return {
     isDoubles,
     sideAName: match?.sideAName || 'Side A',
     sideBName: match?.sideBName || 'Side B',
+    initialServerName: gameState.initialServerName || match?.initialServerName || undefined,
+    initialServingSide: gameState.initialServingSide || match?.initialServingSide || undefined,
   };
 }
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Trophy, Lock, Mail, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Trophy, Lock, Mail, AlertCircle, ArrowRight, ShieldCheck, ArrowLeft } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -54,7 +54,17 @@ export const LoginPage: React.FC = () => {
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-brand-500/10 blur-[120px] rounded-full pointer-events-none"></div>
       <div className="absolute bottom-1/4 left-1/3 w-80 h-80 bg-accent-cyan/10 blur-[100px] rounded-full pointer-events-none"></div>
 
-      <div className="w-full max-w-md space-y-8 z-10">
+      <div className="w-full max-w-md space-y-6 z-10">
+        {/* Back to Home Navigation */}
+        <div className="flex items-center justify-start">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white transition bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 px-3.5 py-2 rounded-xl shadow-md"
+          >
+            <ArrowLeft className="w-4 h-4 text-brand-500" />
+            <span>Back to Home</span>
+          </Link>
+        </div>
         {/* Logo & Header */}
         <div className="text-center space-y-3">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-accent-emerald flex items-center justify-center mx-auto glow-green shadow-xl">

@@ -63,6 +63,7 @@ export interface MatchMetadata {
   sideAName?: string;
   sideBName?: string;
   initialServingSide?: 'A' | 'B';
+  initialServerName?: string;
 }
 
 export interface MatchState {
@@ -108,12 +109,57 @@ export function computeInitialServingState(
   const isDoubles = !!metadata.isDoubles;
   const sideAName = metadata.sideAName || 'Side A';
   const sideBName = metadata.sideBName || 'Side B';
-  const servingSide = metadata.initialServingSide || 'A';
 
-  const sideAPlayers = parsePlayers(sideAName, isDoubles, 'Side A');
-  const sideBPlayers = parsePlayers(sideBName, isDoubles, 'Side B');
+  let sideAPlayers = parsePlayers(sideAName, isDoubles, 'Side A');
+  let sideBPlayers = parsePlayers(sideBName, isDoubles, 'Side B');
 
-  const serviceCourt: 'RIGHT' | 'LEFT' = 'RIGHT'; // Score 0 is EVEN -> RIGHT court
+  let servingSide: 'A' | 'B' = metadata.initialServingSide || 'A';
+
+  // If initialServerName is provided, match against side A & side B players to determine serving side and court position
+  if (metadata.initialServerName) {
+    const serverNameClean = metadata.initialServerName.trim().toLowerCase();
+
+    const sideAMatchIdx = sideAPlayers.findIndex(
+      (p) =>
+        p.name.trim().toLowerCase() === serverNameClean ||
+        p.name.trim().toLowerCase().includes(serverNameClean) ||
+        serverNameClean.includes(p.name.trim().toLowerCase())
+    );
+
+    if (sideAMatchIdx !== -1) {
+      servingSide = 'A';
+      if (isDoubles && sideAPlayers.length >= 2 && sideAMatchIdx !== 0) {
+        // Swap so the selected initial server starts in the RIGHT court (position 'RIGHT') for score 0 (EVEN)
+        const p0 = sideAPlayers[0];
+        const p1 = sideAPlayers[1];
+        sideAPlayers = [
+          { name: p1.name, position: 'RIGHT' },
+          { name: p0.name, position: 'LEFT' },
+        ];
+      }
+    } else {
+      const sideBMatchIdx = sideBPlayers.findIndex(
+        (p) =>
+          p.name.trim().toLowerCase() === serverNameClean ||
+          p.name.trim().toLowerCase().includes(serverNameClean) ||
+          serverNameClean.includes(p.name.trim().toLowerCase())
+      );
+      if (sideBMatchIdx !== -1) {
+        servingSide = 'B';
+        if (isDoubles && sideBPlayers.length >= 2 && sideBMatchIdx !== 0) {
+          // Swap so the selected initial server starts in the RIGHT court (position 'RIGHT') for score 0 (EVEN)
+          const p0 = sideBPlayers[0];
+          const p1 = sideBPlayers[1];
+          sideBPlayers = [
+            { name: p1.name, position: 'RIGHT' },
+            { name: p0.name, position: 'LEFT' },
+          ];
+        }
+      }
+    }
+  }
+
+  const serviceCourt: 'RIGHT' | 'LEFT' = 'RIGHT'; // Initial Score 0-0 is EVEN -> RIGHT court
 
   const servingPlayers = servingSide === 'A' ? sideAPlayers : sideBPlayers;
   const receivingPlayers = servingSide === 'A' ? sideBPlayers : sideAPlayers;

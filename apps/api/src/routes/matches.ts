@@ -36,6 +36,8 @@ const matchSchema = z.object({
   nextMatchId: z.string().optional().nullable(),
   nextMatchSlot: z.enum(['A', 'B']).optional().nullable(),
   targetPoints: z.number().int().min(1).max(100).optional().default(21),
+  initialServerName: z.string().optional().nullable(),
+  initialServingSide: z.enum(['A', 'B']).optional().nullable(),
 });
 
 // GET /api/v1/matches — List matches with filters & search
@@ -157,7 +159,7 @@ matchRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMEN
     return;
   }
 
-  const { targetPoints, ...updatePayload } = result.data;
+  const { targetPoints, initialServerName, initialServingSide, ...updatePayload } = result.data as any;
   const updateData: any = { ...updatePayload };
   if (updateData.scheduledAt) updateData.scheduledAt = new Date(updateData.scheduledAt);
 
@@ -178,13 +180,12 @@ matchRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMEN
     return;
   }
 
-  if (targetPoints) {
-    const existingState = (existing.currentGameState as any) || {};
-    updateData.currentGameState = {
-      ...existingState,
-      targetPoints,
-    };
-  }
+  const existingState = (existing.currentGameState as any) || {};
+  const newGameState = { ...existingState };
+  if (targetPoints !== undefined) newGameState.targetPoints = targetPoints;
+  if (initialServerName !== undefined) newGameState.initialServerName = initialServerName;
+  if (initialServingSide !== undefined) newGameState.initialServingSide = initialServingSide;
+  updateData.currentGameState = newGameState;
 
   const updatedMatch = await prisma.match.update({
     where: { id },
