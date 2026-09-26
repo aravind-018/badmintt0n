@@ -55,6 +55,9 @@ export const AdminFixturesPage: React.FC = () => {
   const selectedCategoryObj = categories.find((c) => c.id === categoryId);
   const isDoublesCategory = selectedCategoryObj?.type?.includes('DOUBLES');
 
+  const [sideATeamId, setSideATeamId] = useState('');
+  const [sideBTeamId, setSideBTeamId] = useState('');
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -105,6 +108,22 @@ export const AdminFixturesPage: React.FC = () => {
     const team = teams.find((t) => t.id === selectedTeamId);
     if (!team) return;
 
+    if (side === 'A') {
+      setSideATeamId(selectedTeamId);
+      if (selectedTeamId === sideBTeamId) {
+        setFormError('A team cannot play against itself.');
+      } else {
+        setFormError(null);
+      }
+    } else {
+      setSideBTeamId(selectedTeamId);
+      if (selectedTeamId === sideATeamId) {
+        setFormError('A team cannot play against itself.');
+      } else {
+        setFormError(null);
+      }
+    }
+
     if (isDoublesCategory) {
       if (team.teamPlayers && team.teamPlayers.length >= 2) {
         const pairNames = team.teamPlayers.map((tp: any) => tp.player.name).slice(0, 2).join(' / ');
@@ -136,6 +155,8 @@ export const AdminFixturesPage: React.FC = () => {
     setScheduledAt('2026-10-18T10:00');
     setSideAName('');
     setSideBName('');
+    setSideATeamId('');
+    setSideBTeamId('');
     setStatus('SCHEDULED');
     setWinnerId('');
     setTargetPoints(21);
@@ -152,6 +173,8 @@ export const AdminFixturesPage: React.FC = () => {
     setScheduledAt(m.scheduledAt ? new Date(m.scheduledAt).toISOString().slice(0, 16) : '');
     setSideAName(m.sideAName);
     setSideBName(m.sideBName);
+    setSideATeamId(m.sideAId || '');
+    setSideBTeamId(m.sideBId || '');
     setStatus(m.status);
     setWinnerId(m.winnerId || '');
     setTargetPoints(m.currentGameState?.targetPoints || 21);
@@ -168,6 +191,14 @@ export const AdminFixturesPage: React.FC = () => {
       return;
     }
 
+    if (
+      sideAName.trim().toLowerCase() === sideBName.trim().toLowerCase() ||
+      (sideATeamId && sideATeamId === sideBTeamId)
+    ) {
+      setFormError('A team cannot play against itself.');
+      return;
+    }
+
     const payload = {
       tournamentId,
       categoryId,
@@ -175,9 +206,9 @@ export const AdminFixturesPage: React.FC = () => {
       round,
       scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
       sideAName,
-      sideAId: editingMatch?.sideAId || 'p-' + Date.now() + '-a',
+      sideAId: sideATeamId || editingMatch?.sideAId || 'p-' + Date.now() + '-a',
       sideBName,
-      sideBId: editingMatch?.sideBId || 'p-' + Date.now() + '-b',
+      sideBId: sideBTeamId || editingMatch?.sideBId || 'p-' + Date.now() + '-b',
       status,
       winnerId: winnerId || null,
       targetPoints: Number(targetPoints),
@@ -502,18 +533,28 @@ export const AdminFixturesPage: React.FC = () => {
                         defaultValue=""
                       >
                         <option value="" disabled>Pick Team...</option>
-                        {teams.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name} ({t.teamPlayers?.length || 0} players)
-                          </option>
-                        ))}
+                        {teams.map((t) => {
+                          const isDisabled = t.id === sideBTeamId || t.name.trim().toLowerCase() === sideBName.trim().toLowerCase();
+                          return (
+                            <option key={t.id} value={t.id} disabled={isDisabled}>
+                              {t.name} ({t.teamPlayers?.length || 0} players){isDisabled ? ' (Selected)' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     )}
                   </div>
                   <input
                     type="text"
                     value={sideAName}
-                    onChange={(e) => setSideAName(e.target.value)}
+                    onChange={(e) => {
+                      setSideAName(e.target.value);
+                      if (e.target.value && e.target.value.trim().toLowerCase() === sideBName.trim().toLowerCase()) {
+                        setFormError('A team cannot play against itself.');
+                      } else {
+                        setFormError(null);
+                      }
+                    }}
                     placeholder={isDoublesCategory ? "Player 1 / Player 2" : "Viktor Axelsen"}
                     className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white"
                     required
@@ -530,18 +571,28 @@ export const AdminFixturesPage: React.FC = () => {
                         defaultValue=""
                       >
                         <option value="" disabled>Pick Team...</option>
-                        {teams.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name} ({t.teamPlayers?.length || 0} players)
-                          </option>
-                        ))}
+                        {teams.map((t) => {
+                          const isDisabled = t.id === sideATeamId || t.name.trim().toLowerCase() === sideAName.trim().toLowerCase();
+                          return (
+                            <option key={t.id} value={t.id} disabled={isDisabled}>
+                              {t.name} ({t.teamPlayers?.length || 0} players){isDisabled ? ' (Selected)' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     )}
                   </div>
                   <input
                     type="text"
                     value={sideBName}
-                    onChange={(e) => setSideBName(e.target.value)}
+                    onChange={(e) => {
+                      setSideBName(e.target.value);
+                      if (e.target.value && e.target.value.trim().toLowerCase() === sideAName.trim().toLowerCase()) {
+                        setFormError('A team cannot play against itself.');
+                      } else {
+                        setFormError(null);
+                      }
+                    }}
                     placeholder={isDoublesCategory ? "Player 3 / Player 4" : "Shi Yuqi"}
                     className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white"
                     required

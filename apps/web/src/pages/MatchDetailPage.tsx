@@ -64,7 +64,14 @@ export const MatchDetailPage: React.FC = () => {
     createdBy: e.scorerId || 'scorer',
   }));
 
-  const matchState = replayMatchEvents(scoringEvents);
+  const isDoubles = match.category?.type ? match.category.type.includes('DOUBLES') : false;
+  const targetPoints = match.currentGameState?.targetPoints || 21;
+  const matchState = replayMatchEvents(scoringEvents, targetPoints, {
+    isDoubles,
+    sideAName: match.sideAName,
+    sideBName: match.sideBName,
+  });
+
   const isSideAWinner = match.winnerId === match.sideAId;
   const isSideBWinner = match.winnerId === match.sideBId;
 
@@ -113,6 +120,18 @@ export const MatchDetailPage: React.FC = () => {
 
         {/* Main Match Display Card */}
         <div className="pub-card" style={{ padding: '2rem', marginBottom: '2rem' }}>
+          {/* Serving Bar Indicator */}
+          {matchState.servingState && match.status === 'LIVE' && (
+            <div style={{ marginBottom: '1.5rem', padding: '0.75rem 1rem', borderRadius: '12px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.85rem' }}>
+              <span style={{ color: '#fef08a', fontWeight: 700 }}>
+                🏸 CURRENT SERVER: <strong style={{ color: '#fff' }}>{matchState.servingState.serverName}</strong> ({matchState.servingState.servingTeamName})
+              </span>
+              <span style={{ color: '#34d399', fontWeight: 800, padding: '0.2rem 0.6rem', borderRadius: '6px', background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.3)' }}>
+                SERVICE COURT: {matchState.servingState.serviceCourt}
+              </span>
+            </div>
+          )}
+
           <div className="match-scoreboard">
             {/* Side A */}
             <div className="side-card">

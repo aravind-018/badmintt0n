@@ -43,6 +43,28 @@ export interface GameState {
   isDeuce: boolean;
 }
 
+export interface PlayerPosition {
+  name: string;
+  position: 'RIGHT' | 'LEFT';
+}
+
+export interface ServingState {
+  servingSide: 'A' | 'B';
+  servingTeamName: string;
+  serverName: string;
+  receiverName: string;
+  serviceCourt: 'RIGHT' | 'LEFT';
+  sideAPlayers: PlayerPosition[];
+  sideBPlayers: PlayerPosition[];
+}
+
+export interface MatchMetadata {
+  isDoubles?: boolean;
+  sideAName?: string;
+  sideBName?: string;
+  initialServingSide?: 'A' | 'B';
+}
+
 export interface MatchState {
   status: MatchStatus;
   currentGameNumber: number;
@@ -53,9 +75,71 @@ export interface MatchState {
   winner?: 'A' | 'B';
   events: MatchEvent[];
   targetPoints: number;
+  servingState: ServingState;
 }
 
-export function createInitialMatchState(targetPoints: number = 21): MatchState {
+export function parsePlayers(
+  name: string | undefined,
+  isDoubles: boolean,
+  defaultSideLabel: string
+): PlayerPosition[] {
+  const raw = (name || defaultSideLabel).trim();
+  if (isDoubles) {
+    const cleaned = raw.replace(/\s*\([^)]*\)\s*$/, '');
+    const parts = cleaned.split(/\s*[\/\&,]\s*/).filter(Boolean);
+    if (parts.length >= 2) {
+      return [
+        { name: parts[0], position: 'RIGHT' },
+        { name: parts[1], position: 'LEFT' },
+      ];
+    } else if (parts.length === 1) {
+      return [
+        { name: parts[0], position: 'RIGHT' },
+        { name: `${parts[0]} (Partner)`, position: 'LEFT' },
+      ];
+    }
+  }
+  return [{ name: raw, position: 'RIGHT' }];
+}
+
+export function computeInitialServingState(
+  metadata: MatchMetadata = {}
+): ServingState {
+  const isDoubles = !!metadata.isDoubles;
+  const sideAName = metadata.sideAName || 'Side A';
+  const sideBName = metadata.sideBName || 'Side B';
+  const servingSide = metadata.initialServingSide || 'A';
+
+  const sideAPlayers = parsePlayers(sideAName, isDoubles, 'Side A');
+  const sideBPlayers = parsePlayers(sideBName, isDoubles, 'Side B');
+
+  const serviceCourt: 'RIGHT' | 'LEFT' = 'RIGHT'; // Score 0 is EVEN -> RIGHT court
+
+  const servingPlayers = servingSide === 'A' ? sideAPlayers : sideBPlayers;
+  const receivingPlayers = servingSide === 'A' ? sideBPlayers : sideAPlayers;
+
+  const server =
+    servingPlayers.find((p) => p.position === serviceCourt) || servingPlayers[0];
+  const receiver =
+    receivingPlayers.find((p) => p.position === serviceCourt) || receivingPlayers[0];
+
+  return {
+    servingSide,
+    servingTeamName: servingSide === 'A' ? sideAName : sideBName,
+    serverName: server?.name || (servingSide === 'A' ? sideAName : sideBName),
+    receiverName: receiver?.name || (servingSide === 'A' ? sideBName : sideAName),
+    serviceCourt,
+    sideAPlayers,
+    sideBPlayers,
+  };
+}
+
+export function createInitialMatchState(
+  targetPoints: number = 21,
+  metadata: MatchMetadata = {}
+): MatchState {
+  const servingState = computeInitialServingState(metadata);
+
   return {
     status: 'SCHEDULED',
     currentGameNumber: 1,
@@ -73,6 +157,7 @@ export function createInitialMatchState(targetPoints: number = 21): MatchState {
     isMatchComplete: false,
     events: [],
     targetPoints,
+    servingState,
   };
 }
 
@@ -125,16 +210,81 @@ export function evaluateGameScore(
 }
 
 /**
+ * Updates ServingState after a rally following BWF Laws.
+ */
+function updateServingState(
+  currentServing: ServingState,
+  winnerSide: 'A' | 'B',
+  sideAPoints: number,
+  sideBPoints: number,
+  isDoubles: boolean,
+  sideAName: string,
+  sideBName: string
+): ServingState {
+  const servingSide = currentServing.servingSide;
+  const isServingSideWinner = winnerSide === servingSide;
+
+  let nextServingSide: 'A' | 'B' = servingSide;
+  let nextSideAPlayers = currentServing.sideAPlayers.map((p) => ({ ...p }));
+  let nextSideBPlayers = currentServing.sideBPlayers.map((p) => ({ ...p }));
+
+  if (isServingSideWinner) {
+    // Serving side retains serve
+    nextServingSide = servingSide;
+
+    // In Doubles, the serving side players SWAP court positions
+    if (isDoubles) {
+      if (servingSide === 'A' && nextSideAPlayers.length >= 2) {
+        const temp = nextSideAPlayers[0].position;
+        nextSideAPlayers[0].position = nextSideAPlayers[1].position;
+        nextSideAPlayers[1].position = temp;
+      } else if (servingSide === 'B' && nextSideBPlayers.length >= 2) {
+        const temp = nextSideBPlayers[0].position;
+        nextSideBPlayers[0].position = nextSideBPlayers[1].position;
+        nextSideBPlayers[1].position = temp;
+      }
+    }
+  } else {
+    // Side-Out! Receiving side becomes the new serving side. Neither side swaps positions.
+    nextServingSide = winnerSide;
+  }
+
+  // Calculate Service Court based on new serving side's score
+  const newServingScore = nextServingSide === 'A' ? sideAPoints : sideBPoints;
+  const nextServiceCourt: 'RIGHT' | 'LEFT' = newServingScore % 2 === 0 ? 'RIGHT' : 'LEFT';
+
+  // Determine Server & Receiver from current court positions
+  const nextServingPlayers = nextServingSide === 'A' ? nextSideAPlayers : nextSideBPlayers;
+  const nextReceivingPlayers = nextServingSide === 'A' ? nextSideBPlayers : nextSideAPlayers;
+
+  const server =
+    nextServingPlayers.find((p) => p.position === nextServiceCourt) || nextServingPlayers[0];
+  const receiver =
+    nextReceivingPlayers.find((p) => p.position === nextServiceCourt) || nextReceivingPlayers[0];
+
+  return {
+    servingSide: nextServingSide,
+    servingTeamName: nextServingSide === 'A' ? sideAName : sideBName,
+    serverName: server?.name || (nextServingSide === 'A' ? sideAName : sideBName),
+    receiverName: receiver?.name || (nextServingSide === 'A' ? sideBName : sideAName),
+    serviceCourt: nextServiceCourt,
+    sideAPlayers: nextSideAPlayers,
+    sideBPlayers: nextSideBPlayers,
+  };
+}
+
+/**
  * Replays an array of point events from start to finish to calculate deterministic state.
  */
 export function replayMatchEvents(
   events: MatchEvent[],
-  targetPoints: number = 21
+  targetPoints: number = 21,
+  metadata: MatchMetadata = {}
 ): MatchState {
-  let state = createInitialMatchState(targetPoints);
+  let state = createInitialMatchState(targetPoints, metadata);
 
   for (const event of events) {
-    state = applySingleEvent(state, event, targetPoints);
+    state = applySingleEvent(state, event, targetPoints, metadata);
   }
 
   return state;
@@ -146,7 +296,8 @@ export function replayMatchEvents(
 function applySingleEvent(
   state: MatchState,
   event: MatchEvent,
-  targetPoints: number = 21
+  targetPoints: number = 21,
+  metadata: MatchMetadata = {}
 ): MatchState {
   const nextEvents = [...state.events, event];
 
@@ -188,7 +339,7 @@ function applySingleEvent(
   }
 
   if (event.type === 'UNDO') {
-    // To undo, filter out the last point event and replay history
+    // To undo, filter out the last point event and replay history deterministically
     const pointEvents = state.events.filter(
       (e) => e.type === 'POINT_SIDE_A' || e.type === 'POINT_SIDE_B'
     );
@@ -196,7 +347,7 @@ function applySingleEvent(
       return state; // Nothing to undo
     }
     const remainingPointEvents = pointEvents.slice(0, pointEvents.length - 1);
-    return replayMatchEvents(remainingPointEvents, targetPoints);
+    return replayMatchEvents(remainingPointEvents, targetPoints, metadata);
   }
 
   if (event.type === 'POINT_SIDE_A' || event.type === 'POINT_SIDE_B') {
@@ -218,8 +369,9 @@ function applySingleEvent(
     }
 
     const activeGame = { ...currentGames[currGameIdx] };
+    const winnerSide: 'A' | 'B' = event.type === 'POINT_SIDE_A' ? 'A' : 'B';
 
-    if (event.type === 'POINT_SIDE_A') {
+    if (winnerSide === 'A') {
       activeGame.sideAPoints += 1;
     } else {
       activeGame.sideBPoints += 1;
@@ -242,6 +394,12 @@ function applySingleEvent(
     let matchWinner: 'A' | 'B' | undefined = undefined;
     let nextGameNum = state.currentGameNumber;
 
+    const isDoubles = !!metadata.isDoubles;
+    const sideAName = metadata.sideAName || 'Side A';
+    const sideBName = metadata.sideBName || 'Side B';
+
+    let nextServingState: ServingState;
+
     if (activeGame.isComplete) {
       if (activeGame.winner === 'A') sideAGamesWon += 1;
       if (activeGame.winner === 'B') sideBGamesWon += 1;
@@ -249,9 +407,27 @@ function applySingleEvent(
       if (sideAGamesWon === 2) {
         isMatchComplete = true;
         matchWinner = 'A';
+        nextServingState = updateServingState(
+          state.servingState,
+          winnerSide,
+          activeGame.sideAPoints,
+          activeGame.sideBPoints,
+          isDoubles,
+          sideAName,
+          sideBName
+        );
       } else if (sideBGamesWon === 2) {
         isMatchComplete = true;
         matchWinner = 'B';
+        nextServingState = updateServingState(
+          state.servingState,
+          winnerSide,
+          activeGame.sideAPoints,
+          activeGame.sideBPoints,
+          isDoubles,
+          sideAName,
+          sideBName
+        );
       } else {
         // Transition to next game (Best of 3)
         nextGameNum += 1;
@@ -262,7 +438,26 @@ function applySingleEvent(
           isComplete: false,
           isDeuce: false,
         });
+
+        // The winner of the game serves first in the next game
+        const gameWinnerSide = activeGame.winner || winnerSide;
+        nextServingState = computeInitialServingState({
+          isDoubles,
+          sideAName,
+          sideBName,
+          initialServingSide: gameWinnerSide,
+        });
       }
+    } else {
+      nextServingState = updateServingState(
+        state.servingState,
+        winnerSide,
+        activeGame.sideAPoints,
+        activeGame.sideBPoints,
+        isDoubles,
+        sideAName,
+        sideBName
+      );
     }
 
     return {
@@ -275,9 +470,11 @@ function applySingleEvent(
       winner: matchWinner,
       events: nextEvents,
       targetPoints,
+      servingState: nextServingState,
     };
   }
 
   return state;
 }
+
 

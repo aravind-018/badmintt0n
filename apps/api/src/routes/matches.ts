@@ -111,6 +111,19 @@ matchRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_
   }
 
   const data = result.data;
+
+  // Validation: Prevent a team or player from playing against itself
+  const isSameId = data.sideAId && data.sideAId !== 'TBD' && data.sideAId === data.sideBId;
+  const isSameName =
+    data.sideAName &&
+    data.sideAName !== 'TBD' &&
+    data.sideAName.trim().toLowerCase() === data.sideBName.trim().toLowerCase();
+
+  if (isSameId || isSameName) {
+    res.status(400).json({ error: 'A team cannot play against itself.' });
+    return;
+  }
+
   const { targetPoints, ...matchPayload } = data;
 
   const match = await prisma.match.create({
@@ -147,6 +160,23 @@ matchRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMEN
   const { targetPoints, ...updatePayload } = result.data;
   const updateData: any = { ...updatePayload };
   if (updateData.scheduledAt) updateData.scheduledAt = new Date(updateData.scheduledAt);
+
+  // Validation: Prevent a team or player from playing against itself
+  const newSideAId = updateData.sideAId !== undefined ? updateData.sideAId : existing.sideAId;
+  const newSideBId = updateData.sideBId !== undefined ? updateData.sideBId : existing.sideBId;
+  const newSideAName = updateData.sideAName !== undefined ? updateData.sideAName : existing.sideAName;
+  const newSideBName = updateData.sideBName !== undefined ? updateData.sideBName : existing.sideBName;
+
+  const isSameId = newSideAId && newSideAId !== 'TBD' && newSideAId === newSideBId;
+  const isSameName =
+    newSideAName &&
+    newSideAName !== 'TBD' &&
+    newSideAName.trim().toLowerCase() === newSideBName.trim().toLowerCase();
+
+  if (isSameId || isSameName) {
+    res.status(400).json({ error: 'A team cannot play against itself.' });
+    return;
+  }
 
   if (targetPoints) {
     const existingState = (existing.currentGameState as any) || {};

@@ -31,6 +31,15 @@ function getMatchTargetPoints(match: any): number {
   return 21;
 }
 
+function getMatchMetadata(match: any) {
+  const isDoubles = match?.category?.type ? match.category.type.includes('DOUBLES') : false;
+  return {
+    isDoubles,
+    sideAName: match?.sideAName || 'Side A',
+    sideBName: match?.sideBName || 'Side B',
+  };
+}
+
 // GET /api/v1/matches/:id/scoring — Get match scoring state & event log
 scoringRouter.get('/:id/scoring', async (req, res) => {
   const { id } = req.params;
@@ -61,7 +70,8 @@ scoringRouter.get('/:id/scoring', async (req, res) => {
   }));
 
   const targetPoints = getMatchTargetPoints(match);
-  const computedState = replayMatchEvents(scoringEvents, targetPoints);
+  const metadata = getMatchMetadata(match);
+  const computedState = replayMatchEvents(scoringEvents, targetPoints, metadata);
 
   res.json({
     match,
@@ -104,6 +114,7 @@ scoringRouter.post(
     }
 
     const targetPoints = getMatchTargetPoints(match);
+    const metadata = getMatchMetadata(match);
 
     // Idempotency check using requestId
     if (requestId) {
@@ -118,7 +129,7 @@ scoringRouter.post(
           timestamp: e.createdAt.toISOString(),
           createdBy: e.scorerId,
         }));
-        const state = replayMatchEvents(scoringEvents, targetPoints);
+        const state = replayMatchEvents(scoringEvents, targetPoints, metadata);
         res.json({ message: 'Duplicate request ignored', state });
         return;
       }
@@ -143,7 +154,7 @@ scoringRouter.post(
     }));
 
     // Compute current state prior to new event
-    const currentState = replayMatchEvents(existingEngineEvents, targetPoints);
+    const currentState = replayMatchEvents(existingEngineEvents, targetPoints, metadata);
     const currentGameNumber = currentState.currentGameNumber;
 
     // Create new event object
@@ -180,9 +191,9 @@ scoringRouter.post(
           timestamp: e.createdAt.toISOString(),
           createdBy: e.scorerId,
         }));
-        nextState = replayMatchEvents(remainingEvents, targetPoints);
+        nextState = replayMatchEvents(remainingEvents, targetPoints, metadata);
       } else {
-        nextState = replayMatchEvents([...existingEngineEvents, newEngineEvent], targetPoints);
+        nextState = replayMatchEvents([...existingEngineEvents, newEngineEvent], targetPoints, metadata);
 
         // Save event to database
         await prisma.matchEvent.create({
