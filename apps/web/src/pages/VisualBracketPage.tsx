@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy, Calendar, Clock, MapPin, Layers, Award, ChevronRight, Zap } from 'lucide-react';
+import { getSocket } from '../lib/socket';
 
 export const VisualBracketPage: React.FC = () => {
   const [matches, setMatches] = useState<any[]>([]);
@@ -35,12 +36,32 @@ export const VisualBracketPage: React.FC = () => {
   useEffect(() => {
     fetchBracketData();
 
-    // Auto-refresh bracket every 5 seconds to show winner progression & live updates
-    const interval = setInterval(() => {
-      fetchBracketData();
-    }, 5000);
+    const socket = getSocket();
+    if (socket.connected) {
+      socket.emit('join:live');
+    } else {
+      socket.once('connect', () => {
+        socket.emit('join:live');
+      });
+    }
 
-    return () => clearInterval(interval);
+    const handleRefresh = () => {
+      fetchBracketData();
+    };
+
+    // Instant refresh whenever any match finishes, starts, or fixture updates
+    socket.on('match:completed', handleRefresh);
+    socket.on('fixture:updated', handleRefresh);
+    socket.on('match:started', handleRefresh);
+
+    window.addEventListener('focus', handleRefresh);
+
+    return () => {
+      socket.off('match:completed', handleRefresh);
+      socket.off('fixture:updated', handleRefresh);
+      socket.off('match:started', handleRefresh);
+      window.removeEventListener('focus', handleRefresh);
+    };
   }, [selectedCategory]);
 
   // Group matches by round name
