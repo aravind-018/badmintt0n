@@ -40,6 +40,7 @@ export const AdminFixturesPage: React.FC = () => {
   const [sideBName, setSideBName] = useState('');
   const [status, setStatus] = useState('SCHEDULED');
   const [winnerId, setWinnerId] = useState('');
+  const [targetPoints, setTargetPoints] = useState<number>(21);
   const [formError, setFormError] = useState<string | null>(null);
 
   // Quick participant picker state
@@ -137,6 +138,7 @@ export const AdminFixturesPage: React.FC = () => {
     setSideBName('');
     setStatus('SCHEDULED');
     setWinnerId('');
+    setTargetPoints(21);
     setFormError(null);
     setIsCreateModalOpen(true);
   };
@@ -152,6 +154,7 @@ export const AdminFixturesPage: React.FC = () => {
     setSideBName(m.sideBName);
     setStatus(m.status);
     setWinnerId(m.winnerId || '');
+    setTargetPoints(m.currentGameState?.targetPoints || 21);
     setFormError(null);
     setIsCreateModalOpen(true);
   };
@@ -177,6 +180,7 @@ export const AdminFixturesPage: React.FC = () => {
       sideBId: editingMatch?.sideBId || 'p-' + Date.now() + '-b',
       status,
       winnerId: winnerId || null,
+      targetPoints: Number(targetPoints),
     };
 
     const url = editingMatch ? `/api/v1/matches/${editingMatch.id}` : '/api/v1/matches';
@@ -575,13 +579,17 @@ export const AdminFixturesPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Scheduled Time</label>
-                  <input
-                    type="datetime-local"
-                    value={scheduledAt}
-                    onChange={(e) => setScheduledAt(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white"
-                  />
+                  <label className="block text-slate-300 font-semibold mb-1">Target Score (Max Points)</label>
+                  <select
+                    value={targetPoints}
+                    onChange={(e) => setTargetPoints(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-amber-400 font-bold"
+                  >
+                    <option value={21}>21 Points (BWF Standard)</option>
+                    <option value={15}>15 Points (Medium Format)</option>
+                    <option value={11}>11 Points (Fast Format)</option>
+                    <option value={30}>30 Points (Single Game / Extended)</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-slate-300 font-semibold mb-1">Status</label>

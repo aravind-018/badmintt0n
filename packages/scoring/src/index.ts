@@ -52,9 +52,10 @@ export interface MatchState {
   isMatchComplete: boolean;
   winner?: 'A' | 'B';
   events: MatchEvent[];
+  targetPoints: number;
 }
 
-export function createInitialMatchState(): MatchState {
+export function createInitialMatchState(targetPoints: number = 21): MatchState {
   return {
     status: 'SCHEDULED',
     currentGameNumber: 1,
@@ -71,35 +72,52 @@ export function createInitialMatchState(): MatchState {
     sideBGamesWon: 0,
     isMatchComplete: false,
     events: [],
+    targetPoints,
   };
 }
 
 /**
  * Evaluates whether a game has been won according to BWF Rules:
- * 1. Reach 21 points with a minimum 2-point lead.
- * 2. At 20-20 (deuce), a 2-point lead is required (e.g., 22-20, 24-22).
- * 3. At 29-29, the 30th point wins immediately (max cap of 30).
+ * 1. Reach targetPoints (default 21) with a minimum 2-point lead.
+ * 2. At (targetPoints - 1) - (targetPoints - 1), a 2-point lead is required.
+ * 3. At capPoints (e.g. 15 for 11, 21 for 15, 30 for 21), max point cap wins immediately.
  */
-export function evaluateGameScore(sideAPoints: number, sideBPoints: number): {
+export function evaluateGameScore(
+  sideAPoints: number,
+  sideBPoints: number,
+  targetPoints: number = 21
+): {
   isComplete: boolean;
   winner?: 'A' | 'B';
   isDeuce: boolean;
 } {
-  const isDeuce = sideAPoints >= 20 && sideBPoints >= 20 && sideAPoints === sideBPoints;
+  const capPoints =
+    targetPoints === 11
+      ? 15
+      : targetPoints === 15
+      ? 21
+      : targetPoints === 30
+      ? 30
+      : Math.min(targetPoints + 9, 30);
 
-  // 30 point max cap rule
-  if (sideAPoints === 30) {
+  const deuceThreshold = Math.max(1, targetPoints - 1);
+
+  const isDeuce =
+    sideAPoints >= deuceThreshold && sideBPoints >= deuceThreshold && sideAPoints === sideBPoints;
+
+  // Max cap rule
+  if (sideAPoints >= capPoints) {
     return { isComplete: true, winner: 'A', isDeuce: false };
   }
-  if (sideBPoints === 30) {
+  if (sideBPoints >= capPoints) {
     return { isComplete: true, winner: 'B', isDeuce: false };
   }
 
-  // Standard 21 win & 2 point lead rule
-  if (sideAPoints >= 21 && sideAPoints - sideBPoints >= 2) {
+  // Standard target win & 2 point lead rule
+  if (sideAPoints >= targetPoints && sideAPoints - sideBPoints >= 2) {
     return { isComplete: true, winner: 'A', isDeuce };
   }
-  if (sideBPoints >= 21 && sideBPoints - sideAPoints >= 2) {
+  if (sideBPoints >= targetPoints && sideBPoints - sideAPoints >= 2) {
     return { isComplete: true, winner: 'B', isDeuce };
   }
 
@@ -109,11 +127,14 @@ export function evaluateGameScore(sideAPoints: number, sideBPoints: number): {
 /**
  * Replays an array of point events from start to finish to calculate deterministic state.
  */
-export function replayMatchEvents(events: MatchEvent[]): MatchState {
-  let state = createInitialMatchState();
+export function replayMatchEvents(
+  events: MatchEvent[],
+  targetPoints: number = 21
+): MatchState {
+  let state = createInitialMatchState(targetPoints);
 
   for (const event of events) {
-    state = applySingleEvent(state, event);
+    state = applySingleEvent(state, event, targetPoints);
   }
 
   return state;
@@ -122,7 +143,11 @@ export function replayMatchEvents(events: MatchEvent[]): MatchState {
 /**
  * Applies a single event to the current match state following BWF laws.
  */
-function applySingleEvent(state: MatchState, event: MatchEvent): MatchState {
+function applySingleEvent(
+  state: MatchState,
+  event: MatchEvent,
+  targetPoints: number = 21
+): MatchState {
   const nextEvents = [...state.events, event];
 
   if (event.type === 'PAUSE') {
@@ -171,7 +196,7 @@ function applySingleEvent(state: MatchState, event: MatchEvent): MatchState {
       return state; // Nothing to undo
     }
     const remainingPointEvents = pointEvents.slice(0, pointEvents.length - 1);
-    return replayMatchEvents(remainingPointEvents);
+    return replayMatchEvents(remainingPointEvents, targetPoints);
   }
 
   if (event.type === 'POINT_SIDE_A' || event.type === 'POINT_SIDE_B') {
@@ -200,7 +225,11 @@ function applySingleEvent(state: MatchState, event: MatchEvent): MatchState {
       activeGame.sideBPoints += 1;
     }
 
-    const evalResult = evaluateGameScore(activeGame.sideAPoints, activeGame.sideBPoints);
+    const evalResult = evaluateGameScore(
+      activeGame.sideAPoints,
+      activeGame.sideBPoints,
+      targetPoints
+    );
     activeGame.isComplete = evalResult.isComplete;
     activeGame.winner = evalResult.winner;
     activeGame.isDeuce = evalResult.isDeuce;
@@ -245,8 +274,10 @@ function applySingleEvent(state: MatchState, event: MatchEvent): MatchState {
       isMatchComplete,
       winner: matchWinner,
       events: nextEvents,
+      targetPoints,
     };
   }
 
   return state;
 }
+

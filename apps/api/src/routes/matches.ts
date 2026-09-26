@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { prisma } from '@badminton-live/database';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
+import { advanceBracketWinner } from '../utils/bracket';
 import { z } from 'zod';
 
 export const matchRouter = Router();
@@ -34,6 +35,7 @@ const matchSchema = z.object({
   winnerId: z.string().optional().nullable(),
   nextMatchId: z.string().optional().nullable(),
   nextMatchSlot: z.enum(['A', 'B']).optional().nullable(),
+  targetPoints: z.number().int().min(1).max(100).optional().default(21),
 });
 
 // GET /api/v1/matches — List matches with filters & search
@@ -109,15 +111,17 @@ matchRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_
   }
 
   const data = result.data;
+  const { targetPoints, ...matchPayload } = data;
 
   const match = await prisma.match.create({
     data: {
-      ...data,
+      ...matchPayload,
       scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : null,
       courtId: data.courtId || null,
       winnerId: data.winnerId || null,
       nextMatchId: data.nextMatchId || null,
       nextMatchSlot: data.nextMatchSlot || null,
+      currentGameState: { targetPoints: targetPoints || 21, games: [] } as any,
     },
     include: { category: true, court: true },
   });
@@ -125,7 +129,7 @@ matchRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_
   res.status(201).json({ message: 'Match created successfully', match });
 });
 
-// PUT /api/v1/matches/:id — Update match (Reschedule, Court, Status, Winner, Bracket Advancement)
+// PUT /api/v1/matches/:id — Update match (Reschedule, Court, Status, Winner, Target Points, Bracket Advancement)
 matchRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN', 'SCORER'), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const result = matchSchema.partial().safeParse(req.body);
@@ -140,8 +144,17 @@ matchRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMEN
     return;
   }
 
-  const updateData: any = { ...result.data };
+  const { targetPoints, ...updatePayload } = result.data;
+  const updateData: any = { ...updatePayload };
   if (updateData.scheduledAt) updateData.scheduledAt = new Date(updateData.scheduledAt);
+
+  if (targetPoints) {
+    const existingState = (existing.currentGameState as any) || {};
+    updateData.currentGameState = {
+      ...existingState,
+      targetPoints,
+    };
+  }
 
   const updatedMatch = await prisma.match.update({
     where: { id },
@@ -150,34 +163,7 @@ matchRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMEN
   });
 
   // Automatic Bracket Winner Advancement
-  const isMatchFinished = updatedMatch.status === 'COMPLETED' || updatedMatch.status === 'WALKOVER';
-  const winnerId = updatedMatch.winnerId;
-
-  if (isMatchFinished && winnerId && updatedMatch.nextMatchId && updatedMatch.nextMatchSlot) {
-    const winnerName = winnerId === updatedMatch.sideAId ? updatedMatch.sideAName : updatedMatch.sideBName;
-    const winnerType = winnerId === updatedMatch.sideAId ? updatedMatch.sideAType : updatedMatch.sideBType;
-
-    const nextMatchUpdate: any = {};
-    if (updatedMatch.nextMatchSlot === 'A') {
-      nextMatchUpdate.sideAId = winnerId;
-      nextMatchUpdate.sideAName = winnerName;
-      nextMatchUpdate.sideAType = winnerType;
-    } else {
-      nextMatchUpdate.sideBId = winnerId;
-      nextMatchUpdate.sideBName = winnerName;
-      nextMatchUpdate.sideBType = winnerType;
-    }
-
-    try {
-      await prisma.match.update({
-        where: { id: updatedMatch.nextMatchId },
-        data: nextMatchUpdate,
-      });
-      console.log(`[Bracket Progression] Winner '${winnerName}' advanced to next match ${updatedMatch.nextMatchId} (Slot ${updatedMatch.nextMatchSlot})`);
-    } catch (err) {
-      console.error('[Bracket Progression Error]:', err);
-    }
-  }
+  await advanceBracketWinner(id);
 
   res.json({ message: 'Match updated successfully', match: updatedMatch });
 });

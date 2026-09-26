@@ -147,6 +147,32 @@ export const ScorerConsolePage: React.FC = () => {
     }
   };
 
+  // Helper to change target score rule (11, 15, 21, 30 pts)
+  const handleTargetPointsChange = async (pts: number) => {
+    if (!selectedMatchId || actionLoading) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/v1/matches/${selectedMatchId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ targetPoints: pts }),
+      });
+      if (res.ok) {
+        showToast(`Target score updated to ${pts} pts`);
+        fetchScoringState(selectedMatchId);
+      } else {
+        showToast('Failed to update target score', 'error');
+      }
+    } catch (err) {
+      showToast('Error updating target score', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const currentGame = scoringState?.games?.[scoringState.currentGameNumber - 1] || {
     sideAPoints: 0,
     sideBPoints: 0,
@@ -220,7 +246,7 @@ export const ScorerConsolePage: React.FC = () => {
       ) : (
         <main className="flex-1 max-w-5xl w-full mx-auto p-4 flex flex-col justify-between gap-6">
           {/* Status & Deuce Indicator Banner */}
-          <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400">
             <div className="flex items-center gap-2">
               <span className="font-bold text-white">Current Game:</span>
               <span className="text-indigo-400 font-extrabold">Game {scoringState?.currentGameNumber || 1}</span>
@@ -232,10 +258,26 @@ export const ScorerConsolePage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-4 text-slate-300 font-medium">
-              <span>Match Score:</span>
-              <span className="font-bold text-white font-mono text-sm">
-                {scoringState?.sideAGamesWon || 0} - {scoringState?.sideBGamesWon || 0}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 text-[11px]">Max Points:</span>
+                <select
+                  value={scoringState?.targetPoints || 21}
+                  onChange={(e) => handleTargetPointsChange(Number(e.target.value))}
+                  className="bg-slate-950 border border-slate-700 text-amber-400 font-bold px-2 py-0.5 rounded text-[11px] cursor-pointer"
+                >
+                  <option value={21}>21 pts (BWF)</option>
+                  <option value={15}>15 pts</option>
+                  <option value={11}>11 pts</option>
+                  <option value={30}>30 pts</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span>Match Score:</span>
+                <span className="font-bold text-white font-mono text-sm">
+                  {scoringState?.sideAGamesWon || 0} - {scoringState?.sideBGamesWon || 0}
+                </span>
+              </div>
             </div>
           </div>
 

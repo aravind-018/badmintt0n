@@ -4,6 +4,7 @@ import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth'
 import { replayMatchEvents, MatchEvent, MatchEventType } from '@badminton-live/scoring';
 import { broadcastScoreUpdate, broadcastMatchEvent } from '../socket';
 import { logAudit } from '../utils/audit';
+import { advanceBracketWinner } from '../utils/bracket';
 import { z } from 'zod';
 
 export const scoringRouter = Router();
@@ -22,6 +23,13 @@ const scoringEventSchema = z.object({
   requestId: z.string().optional(),
   side: z.enum(['A', 'B']).optional(),
 });
+
+function getMatchTargetPoints(match: any): number {
+  if (match?.currentGameState && typeof match.currentGameState === 'object' && !Array.isArray(match.currentGameState)) {
+    return (match.currentGameState as any).targetPoints || 21;
+  }
+  return 21;
+}
 
 // GET /api/v1/matches/:id/scoring — Get match scoring state & event log
 scoringRouter.get('/:id/scoring', async (req, res) => {
@@ -52,7 +60,8 @@ scoringRouter.get('/:id/scoring', async (req, res) => {
     createdBy: e.scorerId,
   }));
 
-  const computedState = replayMatchEvents(scoringEvents);
+  const targetPoints = getMatchTargetPoints(match);
+  const computedState = replayMatchEvents(scoringEvents, targetPoints);
 
   res.json({
     match,
@@ -94,6 +103,8 @@ scoringRouter.post(
       return;
     }
 
+    const targetPoints = getMatchTargetPoints(match);
+
     // Idempotency check using requestId
     if (requestId) {
       const duplicate = match.events.find((e: any) => e.stateSnapshot && (e.stateSnapshot as any).requestId === requestId);
@@ -107,7 +118,7 @@ scoringRouter.post(
           timestamp: e.createdAt.toISOString(),
           createdBy: e.scorerId,
         }));
-        const state = replayMatchEvents(scoringEvents);
+        const state = replayMatchEvents(scoringEvents, targetPoints);
         res.json({ message: 'Duplicate request ignored', state });
         return;
       }
@@ -132,7 +143,7 @@ scoringRouter.post(
     }));
 
     // Compute current state prior to new event
-    const currentState = replayMatchEvents(existingEngineEvents);
+    const currentState = replayMatchEvents(existingEngineEvents, targetPoints);
     const currentGameNumber = currentState.currentGameNumber;
 
     // Create new event object
@@ -169,9 +180,9 @@ scoringRouter.post(
           timestamp: e.createdAt.toISOString(),
           createdBy: e.scorerId,
         }));
-        nextState = replayMatchEvents(remainingEvents);
+        nextState = replayMatchEvents(remainingEvents, targetPoints);
       } else {
-        nextState = replayMatchEvents([...existingEngineEvents, newEngineEvent]);
+        nextState = replayMatchEvents([...existingEngineEvents, newEngineEvent], targetPoints);
 
         // Save event to database
         await prisma.matchEvent.create({
@@ -203,7 +214,7 @@ scoringRouter.post(
         sideBGamesWon: nextState.sideBGamesWon,
         winnerId: winnerId || match.winnerId,
         scorerId: match.scorerId || scorerId,
-        currentGameState: nextState.games as any,
+        currentGameState: { targetPoints, games: nextState.games } as any,
         completedAt: nextState.isMatchComplete ? new Date() : null,
       },
       include: {
@@ -236,6 +247,13 @@ scoringRouter.post(
           completedAt: game.isComplete ? new Date() : null,
         },
       });
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Automatic Knockout Bracket Winner Advancement
+    // ─────────────────────────────────────────────────────────
+    if (nextState.isMatchComplete || updatedMatch.status === 'COMPLETED' || updatedMatch.status === 'WALKOVER' || updatedMatch.status === 'RETIRED') {
+      await advanceBracketWinner(matchId);
     }
 
     // ─────────────────────────────────────────────────────────
@@ -291,3 +309,4 @@ scoringRouter.post(
     });
   }
 );
+

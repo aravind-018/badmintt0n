@@ -34,6 +34,13 @@ export const VisualBracketPage: React.FC = () => {
 
   useEffect(() => {
     fetchBracketData();
+
+    // Auto-refresh bracket every 5 seconds to show winner progression & live updates
+    const interval = setInterval(() => {
+      fetchBracketData();
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, [selectedCategory]);
 
   // Group matches by round name
