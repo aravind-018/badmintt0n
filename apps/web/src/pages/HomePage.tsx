@@ -488,12 +488,13 @@ export const HomePage: React.FC = () => {
           align-items: center;
           gap: 0.75rem;
           margin-bottom: 0.75rem;
+          padding: 0.25rem 0;
         }
         .hlc-side {
           flex: 1;
           display: flex;
           align-items: center;
-          gap: 0.5rem;
+          gap: 0.6rem;
           min-width: 0;
         }
         .hlc-side-a {
@@ -525,6 +526,7 @@ export const HomePage: React.FC = () => {
           font-variant-numeric: tabular-nums;
           line-height: 1;
           flex-shrink: 0;
+          padding: 0 0.15rem;
         }
         .hlc-pts.leading { color: #fff; }
         .hlc-divider {
@@ -533,6 +535,7 @@ export const HomePage: React.FC = () => {
           align-items: center;
           gap: 0.1rem;
           flex-shrink: 0;
+          padding: 0 0.5rem;
         }
         .hlc-set-info { font-size: 1rem; font-weight: 700; color: rgba(255,255,255,0.5); }
         .hlc-g-label { font-size: 0.65rem; color: rgba(255,255,255,0.25); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -687,8 +690,9 @@ export const HomePage: React.FC = () => {
           .home-hero-title { font-size: 2rem; }
           .home-hero-actions { flex-direction: column; width: 100%; }
           .home-cta-primary, .home-cta-secondary { width: 100%; text-align: center; justify-content: center; }
-          .hlc-score { gap: 0.35rem; }
-          .hlc-side { gap: 0.25rem; }
+          .hlc-score { gap: 0.4rem; padding: 0.2rem 0; }
+          .hlc-side { gap: 0.35rem; }
+          .hlc-divider { padding: 0 0.25rem; }
           .hlc-name {
             font-size: 0.775rem;
             white-space: normal;
@@ -699,7 +703,7 @@ export const HomePage: React.FC = () => {
             overflow: hidden;
             word-break: break-word;
           }
-          .hlc-pts { font-size: 1.4rem; }
+          .hlc-pts { font-size: 1.4rem; padding: 0 0.1rem; }
           .hlc-set-info { font-size: 0.85rem; }
           .result-row { grid-template-columns: 1fr auto 1fr; gap: 0.35rem; padding: 0.75rem 0.6rem; }
           .result-name { font-size: 0.8rem; }

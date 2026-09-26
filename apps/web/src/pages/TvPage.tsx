@@ -619,6 +619,65 @@ export function TvPage() {
           animation: tvSpin 0.8s linear infinite;
         }
         @keyframes tvSpin { to { transform: rotate(360deg); } }
+
+        /* ── Mobile Layout (<640px): Stack Names Above Scores ── */
+        @media (max-width: 640px) {
+          .tv-page {
+            overflow-y: auto;
+          }
+          .tv-header {
+            padding: 0.5rem 1rem;
+            height: auto;
+            min-height: 52px;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+          }
+          .tv-header-center { display: none; }
+          .tv-content {
+            padding: 0.75rem;
+            gap: 0.75rem;
+            overflow-y: auto;
+          }
+          .tv-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .tv-panel {
+            padding: 1rem;
+            gap: 0.75rem;
+          }
+          .tv-score-row {
+            gap: 0.5rem;
+          }
+          .tv-side {
+            gap: 0.25rem;
+          }
+          .tv-side-a {
+            flex-direction: column;
+            align-items: center;
+          }
+          .tv-side-b {
+            flex-direction: column-reverse;
+            align-items: center;
+          }
+          .tv-player-names, .tv-names-right, .tv-names-left {
+            text-align: center;
+            align-items: center;
+            width: 100%;
+          }
+          .tv-player-name {
+            font-size: clamp(0.95rem, 3.5vw, 1.25rem);
+            text-align: center;
+            white-space: normal;
+            word-break: break-word;
+          }
+          .tv-score {
+            font-size: clamp(2.5rem, 10vw, 4rem);
+          }
+          .tv-center {
+            min-width: 80px;
+            padding: 0 0.25rem;
+          }
+        }
       `}</style>
     </div>
   );
