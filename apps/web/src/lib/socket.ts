@@ -1,6 +1,13 @@
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const getSocketUrl = (): string | undefined => {
+  const envUrl = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_URL;
+  if (envUrl) return envUrl;
+  if (import.meta.env.DEV) return 'http://localhost:4000';
+  return undefined; // relative same-origin fallback for single-domain Vercel deployment
+};
+
+const SOCKET_URL = getSocketUrl();
 
 let socket: Socket | null = null;
 

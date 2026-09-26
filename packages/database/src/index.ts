@@ -2,6 +2,7 @@ import { PrismaClient } from './generated/prisma';
 
 // ---------------------------------------------------------------------------
 // Singleton PrismaClient — prevents multiple instances during hot reload
+// & serverless warm execution
 // ---------------------------------------------------------------------------
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -16,9 +17,7 @@ export const prisma: PrismaClient =
         : ['error'],
   });
 
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+globalForPrisma.prisma = prisma;
 
 // Re-export generated types
 export * from './generated/prisma';

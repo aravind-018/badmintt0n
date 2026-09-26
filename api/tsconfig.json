@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@badminton-live/database": ["../packages/database/src/index.ts", "../packages/database/dist/index.d.ts"],
+      "@badminton-live/shared": ["../packages/shared/src/index.ts", "../packages/shared/dist/index.d.ts"],
+      "@badminton-live/scoring": ["../packages/scoring/src/index.ts", "../packages/scoring/dist/index.d.ts"]
+    }
+  },
+  "include": ["index.ts"]
+}
