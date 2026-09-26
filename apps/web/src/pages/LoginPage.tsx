@@ -132,34 +132,36 @@ export const LoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Preset Helper Bar */}
-          <div className="pt-4 border-t border-slate-800 space-y-3">
-            <div className="flex items-center justify-between text-xs text-slate-400">
-              <span className="flex items-center gap-1 font-medium text-slate-300">
-                <ShieldCheck className="w-4 h-4 text-brand-500" /> Dev Seed Credentials:
-              </span>
-            </div>
+          {/* Preset Helper Bar (Development Only) */}
+          {import.meta.env.DEV && (
+            <div className="pt-4 border-t border-slate-800 space-y-3">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="flex items-center gap-1 font-medium text-slate-300">
+                  <ShieldCheck className="w-4 h-4 text-brand-500" /> Dev Seed Credentials:
+                </span>
+              </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => setPreset('admin@badminton.live', 'AdminPassword123!')}
-                className="p-2.5 rounded-xl bg-dark-800/80 hover:bg-slate-800 border border-slate-700/60 text-slate-300 text-left transition space-y-0.5"
-              >
-                <div className="font-bold text-brand-500">SUPER_ADMIN</div>
-                <div className="text-[11px] text-slate-400 truncate">admin@badminton.live</div>
-              </button>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setPreset('admin@badminton.live', 'AdminPassword123!')}
+                  className="p-2.5 rounded-xl bg-dark-800/80 hover:bg-slate-800 border border-slate-700/60 text-slate-300 text-left transition space-y-0.5"
+                >
+                  <div className="font-bold text-brand-500">SUPER_ADMIN</div>
+                  <div className="text-[11px] text-slate-400 truncate">admin@badminton.live</div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setPreset('scorer@badminton.live', 'ScorerPassword123!')}
-                className="p-2.5 rounded-xl bg-dark-800/80 hover:bg-slate-800 border border-slate-700/60 text-slate-300 text-left transition space-y-0.5"
-              >
-                <div className="font-bold text-accent-amber">SCORER</div>
-                <div className="text-[11px] text-slate-400 truncate">scorer@badminton.live</div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setPreset('scorer@badminton.live', 'ScorerPassword123!')}
+                  className="p-2.5 rounded-xl bg-dark-800/80 hover:bg-slate-800 border border-slate-700/60 text-slate-300 text-left transition space-y-0.5"
+                >
+                  <div className="font-bold text-accent-amber">SCORER</div>
+                  <div className="text-[11px] text-slate-400 truncate">scorer@badminton.live</div>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

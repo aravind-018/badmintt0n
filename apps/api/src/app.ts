@@ -8,6 +8,9 @@ import { globalLimiter } from './middleware/rateLimiter';
 
 const app = express();
 
+// Trust proxy layer (1 hop for Vercel Edge Proxy)
+app.set('trust proxy', 1);
+
 // Security and middleware
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(
