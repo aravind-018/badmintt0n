@@ -14,6 +14,14 @@
     {
       "source": "/socket.io/(.*)",
       "destination": "/api"
+    },
+    {
+      "source": "/socket.io",
+      "destination": "/api"
+    },
+    {
+      "source": "/((?!api/|socket.io|health).*)",
+      "destination": "/index.html"
     }
   ]
 }

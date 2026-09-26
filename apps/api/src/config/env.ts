@@ -10,22 +10,24 @@ config({ path: path.resolve(process.cwd(), '.env') });
 // Validated environment configuration
 // ---------------------------------------------------------------------------
 
-function requireEnv(key: string): string {
-  const value = process.env[key];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${key}`);
-  }
-  return value;
-}
-
 function getEnv(key: string, defaultValue: string): string {
   return process.env[key] ?? defaultValue;
+}
+
+const resolvedDbUrl =
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_PRISMA_URL ||
+  process.env.POSTGRES_URL ||
+  '';
+
+if (resolvedDbUrl && !process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = resolvedDbUrl;
 }
 
 export const env = {
   NODE_ENV: getEnv('NODE_ENV', 'development'),
   PORT: parseInt(getEnv('PORT', '4000'), 10),
-  DATABASE_URL: getEnv('DATABASE_URL', process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL || ''),
+  DATABASE_URL: resolvedDbUrl,
   CORS_ORIGIN: getEnv('CORS_ORIGIN', '*'),
   JWT_SECRET: getEnv('JWT_SECRET', 'dev-secret-change-in-production'),
   JWT_REFRESH_SECRET: getEnv('JWT_REFRESH_SECRET', 'dev-refresh-secret-change-in-production'),

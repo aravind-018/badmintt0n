@@ -5,6 +5,4 @@ import { initSocket } from '../apps/api/src/socket';
 const server = http.createServer(app);
 initSocket(server);
 
-export default function handler(req: any, res: any) {
-  server.emit('request', req, res);
-}
+export default server;

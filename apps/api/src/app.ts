@@ -12,7 +12,13 @@ const app = express();
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(
   cors({
-    origin: env.CORS_ORIGIN,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, serverless, same-origin)
+      if (!origin) return callback(null, true);
+      if (env.CORS_ORIGIN === '*' || origin === env.CORS_ORIGIN) return callback(null, true);
+      if (origin.endsWith('.vercel.app') || origin.includes('localhost')) return callback(null, true);
+      callback(null, true);
+    },
     credentials: true,
   })
 );
