@@ -30,6 +30,66 @@ export const AdminFixturesPage: React.FC = () => {
   const [editingMatch, setEditingMatch] = useState<any | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
+  const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
+  const [deleteAllInput, setDeleteAllInput] = useState('');
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+
+  const [isDeleteBracketModalOpen, setIsDeleteBracketModalOpen] = useState(false);
+  const [deleteBracketInput, setDeleteBracketInput] = useState('');
+  const [isDeletingBracket, setIsDeletingBracket] = useState(false);
+
+  const handleDeleteAllFixtures = async () => {
+    if (deleteAllInput !== 'DELETE') return;
+    setIsDeletingAll(true);
+    try {
+      let url = '/api/v1/matches/all';
+      if (tournamentId) url += `?tournamentId=${tournamentId}`;
+      const res = await fetch(url, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Failed to delete all fixtures', 'error');
+      } else {
+        showToast('All fixtures deleted successfully');
+        setIsDeleteAllModalOpen(false);
+        setDeleteAllInput('');
+        fetchData();
+      }
+    } catch (err) {
+      showToast('Network error while deleting fixtures', 'error');
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
+  const handleDeleteAllBrackets = async () => {
+    if (deleteBracketInput !== 'DELETE') return;
+    setIsDeletingBracket(true);
+    try {
+      let url = '/api/v1/matches/brackets/all';
+      if (tournamentId) url += `?tournamentId=${tournamentId}`;
+      const res = await fetch(url, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Failed to delete bracket matches', 'error');
+      } else {
+        showToast('Bracket matches deleted successfully');
+        setIsDeleteBracketModalOpen(false);
+        setDeleteBracketInput('');
+        fetchData();
+      }
+    } catch (err) {
+      showToast('Network error while deleting bracket matches', 'error');
+    } finally {
+      setIsDeletingBracket(false);
+    }
+  };
+
   // Form states
   const [tournamentId, setTournamentId] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -312,7 +372,29 @@ export const AdminFixturesPage: React.FC = () => {
             </h2>
             <p className="text-slate-400 text-xs mt-1">Schedule matches, assign courts, and auto-generate tournament brackets</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {matches.length > 0 && (
+              <>
+                <button
+                  onClick={() => {
+                    setDeleteAllInput('');
+                    setIsDeleteAllModalOpen(true);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-rose-400 font-semibold text-xs transition"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete All Fixtures
+                </button>
+                <button
+                  onClick={() => {
+                    setDeleteBracketInput('');
+                    setIsDeleteBracketModalOpen(true);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 font-semibold text-xs transition"
+                >
+                  <Trash2 className="w-4 h-4" /> Clear Bracket
+                </button>
+              </>
+            )}
             <button
               onClick={() => setIsGeneratorModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent-amber hover:bg-amber-600 text-dark-900 font-bold text-xs transition shadow-lg"
@@ -811,6 +893,94 @@ export const AdminFixturesPage: React.FC = () => {
                 className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold"
               >
                 Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete All Fixtures Modal */}
+      {isDeleteAllModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass-card max-w-md w-full p-6 rounded-2xl text-center space-y-4 border border-rose-500/30">
+            <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto" />
+            <div>
+              <h3 className="text-xl font-extrabold text-white">Delete All Fixtures?</h3>
+              <p className="text-xs text-rose-300 mt-2">
+                WARNING: This will permanently delete <strong>ALL</strong> fixtures and recorded scores. This action cannot be undone.
+              </p>
+            </div>
+            <div className="text-left space-y-1.5">
+              <label className="text-xs font-medium text-slate-300">
+                Type <span className="font-mono text-rose-400 font-bold">DELETE</span> to confirm:
+              </label>
+              <input
+                type="text"
+                value={deleteAllInput}
+                onChange={(e) => setDeleteAllInput(e.target.value)}
+                placeholder="DELETE"
+                className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-rose-500/50 text-white text-xs font-mono focus:outline-none focus:border-rose-500"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteAllModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteAllInput !== 'DELETE' || isDeletingAll}
+                onClick={handleDeleteAllFixtures}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition"
+              >
+                {isDeletingAll ? 'Deleting...' : 'Permanently Delete All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete All Brackets Modal */}
+      {isDeleteBracketModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass-card max-w-md w-full p-6 rounded-2xl text-center space-y-4 border border-amber-500/30">
+            <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto" />
+            <div>
+              <h3 className="text-xl font-extrabold text-white">Clear Tournament Bracket?</h3>
+              <p className="text-xs text-amber-300 mt-2">
+                WARNING: This will clear <strong>ALL</strong> generated bracket matches. This action cannot be undone.
+              </p>
+            </div>
+            <div className="text-left space-y-1.5">
+              <label className="text-xs font-medium text-slate-300">
+                Type <span className="font-mono text-amber-400 font-bold">DELETE</span> to confirm:
+              </label>
+              <input
+                type="text"
+                value={deleteBracketInput}
+                onChange={(e) => setDeleteBracketInput(e.target.value)}
+                placeholder="DELETE"
+                className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-amber-500/50 text-white text-xs font-mono focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteBracketModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteBracketInput !== 'DELETE' || isDeletingBracket}
+                onClick={handleDeleteAllBrackets}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition"
+              >
+                {isDeletingBracket ? 'Clearing...' : 'Clear Bracket'}
               </button>
             </div>
           </div>

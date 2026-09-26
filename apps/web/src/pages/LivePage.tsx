@@ -104,7 +104,7 @@ function ScoreCard({ entry, pulse }: { entry: LiveMatchEntry; pulse: boolean }) 
         </div>
       </div>
 
-      {/* Footer */}
+      {/* Footer & Serving Status */}
       <div className="score-card-footer">
         {state.isMatchComplete && state.winner && (
           <span className="winner-label">
@@ -112,9 +112,21 @@ function ScoreCard({ entry, pulse }: { entry: LiveMatchEntry; pulse: boolean }) 
           </span>
         )}
         {!state.isMatchComplete && currentGame && (
-          <span className="game-label">
-            Game {state.currentGameNumber} · {currentGame.sideAPoints}–{currentGame.sideBPoints}
-          </span>
+          <div className="flex flex-col gap-1">
+            <span className="game-label">
+              Game {state.currentGameNumber} · {currentGame.sideAPoints}–{currentGame.sideBPoints}
+            </span>
+            {state.servingState && match.status === 'LIVE' && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', marginTop: '0.35rem', padding: '0.4rem 0.6rem', borderRadius: '8px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)', fontSize: '0.75rem' }}>
+                <span style={{ color: '#fef08a', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  🏸 {state.servingState.serverName} ({state.servingState.servingTeamName})
+                </span>
+                <span style={{ color: '#34d399', fontWeight: 700, padding: '0.1rem 0.4rem', borderRadius: '4px', background: 'rgba(52,211,153,0.15)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  Court: {state.servingState.serviceCourt}
+                </span>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

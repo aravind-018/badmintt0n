@@ -105,6 +105,18 @@ function TvScorePanel({ entry, flashId }: { entry: LiveMatchEntry; flashId: stri
           </div>
         </div>
       </div>
+
+      {/* Serving Strip */}
+      {state.servingState && match.status === 'LIVE' && (
+        <div style={{ padding: '0.4rem 0.8rem', borderRadius: '8px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.8rem', flexWrap: 'wrap' }}>
+          <span style={{ color: '#fef08a', fontWeight: 700 }}>
+            🏸 SERVER: {state.servingState.serverName} ({state.servingState.servingTeamName})
+          </span>
+          <span style={{ color: '#34d399', fontWeight: 800, padding: '0.15rem 0.5rem', borderRadius: '4px', background: 'rgba(52,211,153,0.15)' }}>
+            COURT: {state.servingState.serviceCourt}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

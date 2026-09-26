@@ -102,6 +102,21 @@ playerRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAME
   res.json({ message: 'Player updated successfully', player: updated });
 });
 
+// DELETE /api/v1/players/all — Delete all players
+playerRouter.delete('/all', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const deletedTeamPlayers = await tx.teamPlayer.deleteMany({});
+      const deletedPlayers = await tx.player.deleteMany({});
+      return { deletedPlayers: deletedPlayers.count, deletedTeamPlayers: deletedTeamPlayers.count };
+    });
+
+    res.json({ message: 'All players deleted successfully', ...result });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to delete all players', details: err.message });
+  }
+});
+
 // DELETE /api/v1/players/:id — Delete player
 playerRouter.delete('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;

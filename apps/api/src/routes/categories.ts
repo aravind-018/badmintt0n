@@ -59,6 +59,45 @@ categoryRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAME
   res.status(201).json({ message: 'Category added successfully', category });
 });
 
+// DELETE /api/v1/categories/all — Delete all categories
+categoryRouter.delete('/all', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
+  const { tournamentId } = req.query;
+
+  const where: any = {};
+  if (tournamentId) where.tournamentId = tournamentId as string;
+
+  try {
+    const categoriesToDelete = await prisma.category.findMany({ where, select: { id: true } });
+    const catIds = categoriesToDelete.map((c) => c.id);
+
+    if (catIds.length === 0) {
+      res.json({ message: 'No categories found to delete', count: 0 });
+      return;
+    }
+
+    const matchesToDelete = await prisma.match.findMany({
+      where: { categoryId: { in: catIds } },
+      select: { id: true },
+    });
+    const matchIds = matchesToDelete.map((m) => m.id);
+
+    await prisma.$transaction(async (tx) => {
+      if (matchIds.length > 0) {
+        await tx.matchEvent.deleteMany({ where: { matchId: { in: matchIds } } });
+        await tx.matchGame.deleteMany({ where: { matchId: { in: matchIds } } });
+        await tx.match.updateMany({ where: { id: { in: matchIds } }, data: { nextMatchId: null } });
+        await tx.match.deleteMany({ where: { id: { in: matchIds } } });
+      }
+      await tx.standing.deleteMany({ where: { categoryId: { in: catIds } } });
+      await tx.category.deleteMany({ where: { id: { in: catIds } } });
+    });
+
+    res.json({ message: 'All categories deleted successfully', count: catIds.length });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to delete categories', details: err.message });
+  }
+});
+
 // DELETE /api/v1/categories/:id — Delete category
 categoryRouter.delete('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;

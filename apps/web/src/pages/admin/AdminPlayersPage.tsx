@@ -18,12 +18,40 @@ export const AdminPlayersPage: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
+  const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
+  const [deleteAllInput, setDeleteAllInput] = useState('');
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+
   const [name, setName] = useState('');
   const [gender, setGender] = useState('MALE');
   const [seed, setSeed] = useState<number | ''>('');
   const [ranking, setRanking] = useState<number | ''>('');
   const [teamId, setTeamId] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+
+  const handleDeleteAll = async () => {
+    if (deleteAllInput !== 'DELETE') return;
+    setIsDeletingAll(true);
+    try {
+      const res = await fetch('/api/v1/players/all', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Failed to delete all players', 'error');
+      } else {
+        showToast('All players deleted successfully');
+        setIsDeleteAllModalOpen(false);
+        setDeleteAllInput('');
+        fetchData();
+      }
+    } catch (err) {
+      showToast('Network error while deleting players', 'error');
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -151,12 +179,25 @@ export const AdminPlayersPage: React.FC = () => {
             </h2>
             <p className="text-slate-400 text-xs mt-1">Manage tournament athletes, seeds, rankings, and team memberships</p>
           </div>
-          <button
-            onClick={openCreateModal}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition shadow-lg glow-green"
-          >
-            <Plus className="w-4 h-4" /> Add Player
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {players.length > 0 && (
+              <button
+                onClick={() => {
+                  setDeleteAllInput('');
+                  setIsDeleteAllModalOpen(true);
+                }}
+                className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-rose-400 font-semibold text-xs transition"
+              >
+                <Trash2 className="w-4 h-4" /> Delete All Players
+              </button>
+            )}
+            <button
+              onClick={openCreateModal}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition shadow-lg glow-green"
+            >
+              <Plus className="w-4 h-4" /> Add Player
+            </button>
+          </div>
         </div>
 
         {/* Search & Filter */}
@@ -365,6 +406,50 @@ export const AdminPlayersPage: React.FC = () => {
                 className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold"
               >
                 Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete All Confirmation Modal */}
+      {isDeleteAllModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="glass-card max-w-md w-full p-6 rounded-2xl text-center space-y-4 border border-rose-500/30">
+            <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto" />
+            <div>
+              <h3 className="text-xl font-extrabold text-white">Delete All Players?</h3>
+              <p className="text-xs text-rose-300 mt-2">
+                WARNING: This will permanently delete <strong>ALL</strong> registered players and their team assignments. This action cannot be undone.
+              </p>
+            </div>
+            <div className="text-left space-y-1.5">
+              <label className="text-xs font-medium text-slate-300">
+                Type <span className="font-mono text-rose-400 font-bold">DELETE</span> to confirm:
+              </label>
+              <input
+                type="text"
+                value={deleteAllInput}
+                onChange={(e) => setDeleteAllInput(e.target.value)}
+                placeholder="DELETE"
+                className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-rose-500/50 text-white text-xs font-mono focus:outline-none focus:border-rose-500"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteAllModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteAllInput !== 'DELETE' || isDeletingAll}
+                onClick={handleDeleteAll}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition"
+              >
+                {isDeletingAll ? 'Deleting...' : 'Permanently Delete All'}
               </button>
             </div>
           </div>

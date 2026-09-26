@@ -18,6 +18,7 @@ export interface LiveMatchState {
   isMatchComplete: boolean;
   winner: 'A' | 'B' | null;
   serving: 'A' | 'B' | null;
+  servingState?: any;
 }
 
 export interface LiveMatch {

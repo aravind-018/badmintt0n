@@ -198,6 +198,66 @@ matchRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMEN
   res.json({ message: 'Match updated successfully', match: updatedMatch });
 });
 
+// DELETE /api/v1/matches/all — Delete all matches / fixtures
+matchRouter.delete('/all', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
+  const { tournamentId, categoryId } = req.query;
+
+  const where: any = {};
+  if (tournamentId) where.tournamentId = tournamentId as string;
+  if (categoryId) where.categoryId = categoryId as string;
+
+  try {
+    const matchesToDelete = await prisma.match.findMany({ where, select: { id: true } });
+    const matchIds = matchesToDelete.map((m) => m.id);
+
+    if (matchIds.length === 0) {
+      res.json({ message: 'No matches found to delete', count: 0 });
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.matchEvent.deleteMany({ where: { matchId: { in: matchIds } } });
+      await tx.matchGame.deleteMany({ where: { matchId: { in: matchIds } } });
+      await tx.match.updateMany({ where: { id: { in: matchIds } }, data: { nextMatchId: null } });
+      await tx.match.deleteMany({ where: { id: { in: matchIds } } });
+    });
+
+    res.json({ message: 'All fixtures deleted successfully', count: matchIds.length });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to delete fixtures', details: err.message });
+  }
+});
+
+// DELETE /api/v1/matches/brackets/all — Delete all bracket matches
+matchRouter.delete('/brackets/all', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
+  const { tournamentId, categoryId } = req.query;
+
+  const where: any = {};
+  if (tournamentId) where.tournamentId = tournamentId as string;
+  if (categoryId) where.categoryId = categoryId as string;
+
+  try {
+    const matchesToDelete = await prisma.match.findMany({ where, select: { id: true } });
+    const matchIds = matchesToDelete.map((m) => m.id);
+
+    if (matchIds.length === 0) {
+      res.json({ message: 'No bracket matches found to delete', count: 0 });
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.matchEvent.deleteMany({ where: { matchId: { in: matchIds } } });
+      await tx.matchGame.deleteMany({ where: { matchId: { in: matchIds } } });
+      await tx.match.updateMany({ where: { id: { in: matchIds } }, data: { nextMatchId: null } });
+      await tx.match.deleteMany({ where: { id: { in: matchIds } } });
+    });
+
+    res.json({ message: 'Bracket deleted successfully', count: matchIds.length });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to delete bracket matches', details: err.message });
+  }
+});
+
 // DELETE /api/v1/matches/:id — Delete match
 matchRouter.delete('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
