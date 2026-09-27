@@ -105,7 +105,7 @@ tournamentRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNA
       startDate: new Date(data.startDate),
       endDate: new Date(data.endDate),
       createdById: req.user!.id,
-    },
+    } as any,
   });
 
   res.status(201).json({ message: 'Tournament created successfully', tournament });

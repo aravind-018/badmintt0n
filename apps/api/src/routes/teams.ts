@@ -60,7 +60,7 @@ teamRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_A
   }
 
   const team = await prisma.team.create({
-    data: result.data,
+    data: result.data as any,
     include: { tournament: { select: { id: true, name: true } } },
   });
 

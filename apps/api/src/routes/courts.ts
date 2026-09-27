@@ -50,7 +50,7 @@ courtRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_
   }
 
   const court = await prisma.court.create({
-    data: result.data,
+    data: result.data as any,
     include: { tournament: { select: { id: true, name: true } } },
   });
 

@@ -56,7 +56,7 @@ playerRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT
   const { teamId, ...playerData } = result.data;
 
   const player = await prisma.player.create({
-    data: playerData,
+    data: playerData as any,
   });
 
   if (teamId) {

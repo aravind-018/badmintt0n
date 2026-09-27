@@ -137,7 +137,7 @@ matchRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_
       nextMatchId: data.nextMatchId || null,
       nextMatchSlot: data.nextMatchSlot || null,
       currentGameState: { targetPoints: targetPoints || 21, games: [] } as any,
-    },
+    } as any,
     include: { category: true, court: true },
   });
 
