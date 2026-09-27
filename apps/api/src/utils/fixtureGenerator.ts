@@ -14,15 +14,15 @@ export interface GroupDistribution {
 }
 
 /**
- * Calculates group sizes and distributes participants evenly according to requirement 4.
- * Maximum group size = 4.
- * numberOfGroups = Math.ceil(totalTeams / 4)
+ * Calculates group sizes and distributes participants evenly.
+ * Maximum group size = 3.
+ * numberOfGroups = Math.ceil(totalTeams / 3)
  */
 export function distributeTeamsIntoGroups(participants: Participant[]): GroupDistribution[] {
   const total = participants.length;
   if (total === 0) return [];
 
-  const numberOfGroups = Math.ceil(total / 4);
+  const numberOfGroups = Math.ceil(total / 3);
   const baseSize = Math.floor(total / numberOfGroups);
   const remainder = total % numberOfGroups;
 

@@ -477,7 +477,7 @@ matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADM
       const matchesToCreate: any[] = [];
 
       if (totalTeams > 8) {
-        // AUTOMATIC GROUP STAGE (> 8 teams, max 4 per group)
+        // AUTOMATIC GROUP STAGE (> 8 teams, max 3 per group)
         const groups = distributeTeamsIntoGroups(participants);
 
         // Create initial Standing records for every participant in their group

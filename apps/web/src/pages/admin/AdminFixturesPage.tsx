@@ -394,7 +394,7 @@ export const AdminFixturesPage: React.FC = () => {
               <Calendar className="w-6 h-6 text-brand-500" /> Fixture & Bracket Management
             </h2>
             <p className="text-slate-400 text-xs mt-1">
-              Automated Group Stage (max 4 per group) & Knockout Bracket generator
+              Automated Group Stage (max 3 per group) & Knockout Bracket generator
             </p>
           </div>
 
@@ -813,7 +813,7 @@ export const AdminFixturesPage: React.FC = () => {
                   </div>
                   {generatorPreview.numberOfGroups > 0 && (
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Number of Groups (max 4 per group):</span>
+                      <span className="text-slate-400">Number of Groups (max 3 per group):</span>
                       <span className="font-bold text-accent-cyan">{generatorPreview.numberOfGroups} Groups</span>
                     </div>
                   )}
