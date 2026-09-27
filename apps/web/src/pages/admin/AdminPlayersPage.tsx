@@ -5,7 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { UserCheck, Plus, Search, Edit, Trash2, X, Award, Shield, AlertTriangle } from 'lucide-react';
 
 export const AdminPlayersPage: React.FC = () => {
-  const { accessToken } = useAuth();
+  const { accessToken, fetchWithAuth } = useAuth();
   const { showToast } = useToast();
 
   const [players, setPlayers] = useState<any[]>([]);
@@ -33,9 +33,8 @@ export const AdminPlayersPage: React.FC = () => {
     if (deleteAllInput !== 'DELETE') return;
     setIsDeletingAll(true);
     try {
-      const res = await fetch('/api/v1/players/all', {
+      const res = await fetchWithAuth('/api/v1/players/all', {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${accessToken}` },
       });
       const data = await res.json();
       if (!res.ok) {
@@ -123,11 +122,10 @@ export const AdminPlayersPage: React.FC = () => {
     const method = editingId ? 'PUT' : 'POST';
 
     try {
-      const res = await fetch(url, {
+      const res = await fetchWithAuth(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify(payload),
       });
@@ -150,9 +148,8 @@ export const AdminPlayersPage: React.FC = () => {
     if (!deleteTargetId) return;
 
     try {
-      const res = await fetch(`/api/v1/players/${deleteTargetId}`, {
+      const res = await fetchWithAuth(`/api/v1/players/${deleteTargetId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (!res.ok) {

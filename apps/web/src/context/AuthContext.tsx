@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Role } from '@badminton-live/shared';
+import { fetchWithAuth, requestTokenRefresh, onTokenRefreshed } from '../lib/api';
+
+export { fetchWithAuth, requestTokenRefresh } from '../lib/api';
 
 export interface User {
   id: string;
@@ -15,72 +18,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string; user?: User }>;
   logout: () => Promise<void>;
   hasRole: (...roles: Role[]) => boolean;
-  fetchWithAuth: (url: string, init?: RequestInit) => Promise<Response>;
-}
-
-let activeRefreshPromise: Promise<string | null> | null = null;
-
-export async function requestTokenRefresh(): Promise<string | null> {
-  if (activeRefreshPromise) return activeRefreshPromise;
-
-  activeRefreshPromise = (async () => {
-    try {
-      const refreshToken = localStorage.getItem('badminton_refresh_token');
-      if (!refreshToken) return null;
-
-      const res = await fetch('/api/v1/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
-
-      if (!res.ok) {
-        localStorage.removeItem('badminton_access_token');
-        localStorage.removeItem('badminton_refresh_token');
-        return null;
-      }
-
-      const data = await res.json();
-      if (data.accessToken) {
-        localStorage.setItem('badminton_access_token', data.accessToken);
-        if (data.refreshToken) {
-          localStorage.setItem('badminton_refresh_token', data.refreshToken);
-        }
-        return data.accessToken as string;
-      }
-      return null;
-    } catch (err) {
-      console.warn('[AuthContext] Refresh request failed:', err);
-      return null;
-    } finally {
-      activeRefreshPromise = null;
-    }
-  })();
-
-  return activeRefreshPromise;
-}
-
-export async function fetchWithAuth(url: string, init: RequestInit = {}): Promise<Response> {
-  const token = localStorage.getItem('badminton_access_token');
-  const headers = new Headers(init.headers || {});
-
-  if (token && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-
-  let res = await fetch(url, { ...init, headers });
-
-  // If 401 Unauthorized, attempt refresh
-  if (res.status === 401) {
-    const newToken = await requestTokenRefresh();
-    if (newToken) {
-      const retryHeaders = new Headers(init.headers || {});
-      retryHeaders.set('Authorization', `Bearer ${newToken}`);
-      res = await fetch(url, { ...init, headers: retryHeaders });
-    }
-  }
-
-  return res;
+  fetchWithAuth: (url: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -92,7 +30,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Restore user session on mount if token exists
+  // Subscribe to background token refreshes to keep React state synchronized
+  useEffect(() => {
+    const unsubscribe = onTokenRefreshed((newToken) => {
+      setAccessToken(newToken);
+      if (!newToken) {
+        setUser(null);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  // Restore user session on mount
   useEffect(() => {
     let isCancelled = false;
 
@@ -105,51 +54,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Try with current access token
-      if (token) {
-        try {
-          const res = await fetch('/api/v1/auth/me', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+      try {
+        // fetchWithAuth will automatically refresh if access token expired
+        const res = await fetchWithAuth('/api/v1/auth/me');
 
-          if (res.ok) {
-            const data = await res.json();
-            if (!isCancelled) {
-              setUser(data.user);
-              setAccessToken(token);
-              setIsLoading(false);
-            }
-            return;
+        if (res.ok) {
+          const data = await res.json();
+          if (!isCancelled) {
+            setUser(data.user);
+            setAccessToken(localStorage.getItem('badminton_access_token'));
+            setIsLoading(false);
           }
-        } catch {
-          // fetch network issue or 401, proceed to refresh token
+          return;
         }
+      } catch (err) {
+        console.warn('[AuthContext] Session restoration error:', err);
       }
 
-      // If token missing or invalid/expired (401), try refresh token
-      if (refreshToken) {
-        const refreshedToken = await requestTokenRefresh();
-        if (refreshedToken) {
-          try {
-            const res = await fetch('/api/v1/auth/me', {
-              headers: { Authorization: `Bearer ${refreshedToken}` },
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (!isCancelled) {
-                setUser(data.user);
-                setAccessToken(refreshedToken);
-                setIsLoading(false);
-              }
-              return;
-            }
-          } catch {
-            // refresh failed to fetch me
-          }
-        }
-      }
-
-      // If neither worked, clean up invalid tokens
+      // If auth/me failed completely even after refresh attempt
       if (!isCancelled) {
         localStorage.removeItem('badminton_access_token');
         localStorage.removeItem('badminton_refresh_token');
