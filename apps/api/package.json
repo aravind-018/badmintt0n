@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/index.ts",
     "prebuild": "npx prisma generate --schema=../../packages/database/prisma/schema.prisma",
-    "build": "tsc --project tsconfig.json && node -e \"const fs=require('fs'); if(!fs.existsSync('dist')) fs.mkdirSync('dist', {recursive: true}); fs.writeFileSync('dist/index.html', '<html><body>Badminton Live API Service</body></html>');\"",
+    "build": "tsc --project tsconfig.json && node ../../scripts/prepare-vercel-dist.js",
     "start": "node dist/index.js",
     "test:phase2": "tsx tests/test-phase2.ts",
     "test:phase3": "tsx tests/test-phase3.ts",
