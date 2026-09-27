@@ -89,29 +89,474 @@ export function generateGroupRoundRobinMatches(
 }
 
 /**
- * Generates a valid knockout bracket structure (powers of 2 or play-in round).
+ * Generates and saves a linked knockout bracket tree inside a Prisma transaction for any team count.
  */
-export function generateKnockoutMatchesStructure(
+export async function createKnockoutMatchesInTx(
+  tx: any,
   tournamentId: string,
   categoryId: string,
   qualifiedTeams: Participant[]
-) {
+): Promise<any[]> {
   const count = qualifiedTeams.length;
   if (count < 2) return [];
 
-  const createdMatches: any[] = [];
+  const p = qualifiedTeams;
 
-  // Determine closest power of 2
-  // Powers: 2, 4, 8, 16, 32
-  if (count === 8) {
-    // 8 teams: Quarter Finals (4 matches) -> Semi Finals (2 matches) -> Final (1 match)
-    // TBD placeholders for SF and Final match records will be linked via nextMatchId
-    // Standard seeding: A1 vs B2, C1 vs D2, B1 vs A2, D1 vs C2
-    const p = qualifiedTeams;
+  if (count === 2) {
+    const finalMatch = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Grand Final',
+        roundNumber: 1,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: p[0]?.type || 'TEAM',
+        sideAId: p[0]?.id || 'TBD',
+        sideAName: p[0]?.name || 'Qualified 1',
+        sideBType: p[1]?.type || 'TEAM',
+        sideBId: p[1]?.id || 'TBD',
+        sideBName: p[1]?.name || 'Qualified 2',
+        status: 'SCHEDULED',
+      },
+    });
+    return [finalMatch];
+  }
 
-    // Final
-    const finalMatch = {
-      id: `temp_final_${Date.now()}`,
+  if (count === 3) {
+    const finalMatch = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Grand Final',
+        roundNumber: 2,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: 'PLAYER',
+        sideAId: 'TBD',
+        sideAName: 'Winner Semi Final 1',
+        sideBType: p[2]?.type || 'TEAM',
+        sideBId: p[2]?.id || 'TBD',
+        sideBName: p[2]?.name || 'Qualified 3',
+        status: 'SCHEDULED',
+      },
+    });
+
+    const sf1 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Semi Finals',
+        roundNumber: 1,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: p[0]?.type || 'TEAM',
+        sideAId: p[0]?.id || 'TBD',
+        sideAName: p[0]?.name || 'Qualified 1',
+        sideBType: p[1]?.type || 'TEAM',
+        sideBId: p[1]?.id || 'TBD',
+        sideBName: p[1]?.name || 'Qualified 2',
+        status: 'SCHEDULED',
+        nextMatchId: finalMatch.id,
+        nextMatchSlot: 'A',
+      },
+    });
+
+    return [finalMatch, sf1];
+  }
+
+  if (count === 4) {
+    const finalMatch = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Grand Final',
+        roundNumber: 2,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: 'PLAYER',
+        sideAId: 'TBD',
+        sideAName: 'Winner Semi Final 1',
+        sideBType: 'PLAYER',
+        sideBId: 'TBD',
+        sideBName: 'Winner Semi Final 2',
+        status: 'SCHEDULED',
+      },
+    });
+
+    const sf1 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Semi Finals',
+        roundNumber: 1,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: p[0]?.type || 'TEAM',
+        sideAId: p[0]?.id || 'TBD',
+        sideAName: p[0]?.name || 'Qualified 1',
+        sideBType: p[3]?.type || 'TEAM',
+        sideBId: p[3]?.id || 'TBD',
+        sideBName: p[3]?.name || 'Qualified 4',
+        status: 'SCHEDULED',
+        nextMatchId: finalMatch.id,
+        nextMatchSlot: 'A',
+      },
+    });
+
+    const sf2 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Semi Finals',
+        roundNumber: 1,
+        matchNumber: 2,
+        bracketPosition: 2,
+        sideAType: p[1]?.type || 'TEAM',
+        sideAId: p[1]?.id || 'TBD',
+        sideAName: p[1]?.name || 'Qualified 2',
+        sideBType: p[2]?.type || 'TEAM',
+        sideBId: p[2]?.id || 'TBD',
+        sideBName: p[2]?.name || 'Qualified 3',
+        status: 'SCHEDULED',
+        nextMatchId: finalMatch.id,
+        nextMatchSlot: 'B',
+      },
+    });
+
+    return [finalMatch, sf1, sf2];
+  }
+
+  if (count === 5) {
+    const finalMatch = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Grand Final',
+        roundNumber: 3,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: 'PLAYER',
+        sideAId: 'TBD',
+        sideAName: 'Winner Semi Final 1',
+        sideBType: 'PLAYER',
+        sideBId: 'TBD',
+        sideBName: 'Winner Semi Final 2',
+        status: 'SCHEDULED',
+      },
+    });
+
+    const sf1 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Semi Finals',
+        roundNumber: 2,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: p[0]?.type || 'TEAM',
+        sideAId: p[0]?.id || 'TBD',
+        sideAName: p[0]?.name || 'Qualified 1',
+        sideBType: 'PLAYER',
+        sideBId: 'TBD',
+        sideBName: 'Winner Play-In 1',
+        status: 'SCHEDULED',
+        nextMatchId: finalMatch.id,
+        nextMatchSlot: 'A',
+      },
+    });
+
+    const sf2 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Semi Finals',
+        roundNumber: 2,
+        matchNumber: 2,
+        bracketPosition: 2,
+        sideAType: p[1]?.type || 'TEAM',
+        sideAId: p[1]?.id || 'TBD',
+        sideAName: p[1]?.name || 'Qualified 2',
+        sideBType: p[2]?.type || 'TEAM',
+        sideBId: p[2]?.id || 'TBD',
+        sideBName: p[2]?.name || 'Qualified 3',
+        status: 'SCHEDULED',
+        nextMatchId: finalMatch.id,
+        nextMatchSlot: 'B',
+      },
+    });
+
+    const playIn1 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'PLAY_IN',
+        round: 'Play-In Round',
+        roundNumber: 1,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: p[3]?.type || 'TEAM',
+        sideAId: p[3]?.id || 'TBD',
+        sideAName: p[3]?.name || 'Qualified 4',
+        sideBType: p[4]?.type || 'TEAM',
+        sideBId: p[4]?.id || 'TBD',
+        sideBName: p[4]?.name || 'Qualified 5',
+        status: 'SCHEDULED',
+        nextMatchId: sf1.id,
+        nextMatchSlot: 'B',
+      },
+    });
+
+    return [finalMatch, sf1, sf2, playIn1];
+  }
+
+  if (count === 6) {
+    const finalMatch = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Grand Final',
+        roundNumber: 3,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: 'PLAYER',
+        sideAId: 'TBD',
+        sideAName: 'Winner Semi Final 1',
+        sideBType: 'PLAYER',
+        sideBId: 'TBD',
+        sideBName: 'Winner Semi Final 2',
+        status: 'SCHEDULED',
+      },
+    });
+
+    const sf1 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Semi Finals',
+        roundNumber: 2,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: p[0]?.type || 'TEAM',
+        sideAId: p[0]?.id || 'TBD',
+        sideAName: p[0]?.name || 'Qualified 1',
+        sideBType: 'PLAYER',
+        sideBId: 'TBD',
+        sideBName: 'Winner Play-In 1',
+        status: 'SCHEDULED',
+        nextMatchId: finalMatch.id,
+        nextMatchSlot: 'A',
+      },
+    });
+
+    const sf2 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Semi Finals',
+        roundNumber: 2,
+        matchNumber: 2,
+        bracketPosition: 2,
+        sideAType: p[1]?.type || 'TEAM',
+        sideAId: p[1]?.id || 'TBD',
+        sideAName: p[1]?.name || 'Qualified 2',
+        sideBType: 'PLAYER',
+        sideBId: 'TBD',
+        sideBName: 'Winner Play-In 2',
+        status: 'SCHEDULED',
+        nextMatchId: finalMatch.id,
+        nextMatchSlot: 'B',
+      },
+    });
+
+    const playIn1 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'PLAY_IN',
+        round: 'Play-In Round',
+        roundNumber: 1,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: p[2]?.type || 'TEAM',
+        sideAId: p[2]?.id || 'TBD',
+        sideAName: p[2]?.name || 'Qualified 3',
+        sideBType: p[5]?.type || 'TEAM',
+        sideBId: p[5]?.id || 'TBD',
+        sideBName: p[5]?.name || 'Qualified 6',
+        status: 'SCHEDULED',
+        nextMatchId: sf1.id,
+        nextMatchSlot: 'B',
+      },
+    });
+
+    const playIn2 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'PLAY_IN',
+        round: 'Play-In Round',
+        roundNumber: 1,
+        matchNumber: 2,
+        bracketPosition: 2,
+        sideAType: p[3]?.type || 'TEAM',
+        sideAId: p[3]?.id || 'TBD',
+        sideAName: p[3]?.name || 'Qualified 4',
+        sideBType: p[4]?.type || 'TEAM',
+        sideBId: p[4]?.id || 'TBD',
+        sideBName: p[4]?.name || 'Qualified 5',
+        status: 'SCHEDULED',
+        nextMatchId: sf2.id,
+        nextMatchSlot: 'B',
+      },
+    });
+
+    return [finalMatch, sf1, sf2, playIn1, playIn2];
+  }
+
+  if (count === 7) {
+    const finalMatch = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Grand Final',
+        roundNumber: 3,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: 'PLAYER',
+        sideAId: 'TBD',
+        sideAName: 'Winner Semi Final 1',
+        sideBType: 'PLAYER',
+        sideBId: 'TBD',
+        sideBName: 'Winner Semi Final 2',
+        status: 'SCHEDULED',
+      },
+    });
+
+    const sf1 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Semi Finals',
+        roundNumber: 2,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: p[0]?.type || 'TEAM',
+        sideAId: p[0]?.id || 'TBD',
+        sideAName: p[0]?.name || 'Qualified 1',
+        sideBType: 'PLAYER',
+        sideBId: 'TBD',
+        sideBName: 'Winner Quarter Final 1',
+        status: 'SCHEDULED',
+        nextMatchId: finalMatch.id,
+        nextMatchSlot: 'A',
+      },
+    });
+
+    const sf2 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Semi Finals',
+        roundNumber: 2,
+        matchNumber: 2,
+        bracketPosition: 2,
+        sideAType: 'PLAYER',
+        sideAId: 'TBD',
+        sideAName: 'Winner Quarter Final 2',
+        sideBType: 'PLAYER',
+        sideBId: 'TBD',
+        sideBName: 'Winner Quarter Final 3',
+        status: 'SCHEDULED',
+        nextMatchId: finalMatch.id,
+        nextMatchSlot: 'B',
+      },
+    });
+
+    const qf1 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Quarter Finals',
+        roundNumber: 1,
+        matchNumber: 1,
+        bracketPosition: 1,
+        sideAType: p[1]?.type || 'TEAM',
+        sideAId: p[1]?.id || 'TBD',
+        sideAName: p[1]?.name || 'Qualified 2',
+        sideBType: p[6]?.type || 'TEAM',
+        sideBId: p[6]?.id || 'TBD',
+        sideBName: p[6]?.name || 'Qualified 7',
+        status: 'SCHEDULED',
+        nextMatchId: sf1.id,
+        nextMatchSlot: 'B',
+      },
+    });
+
+    const qf2 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Quarter Finals',
+        roundNumber: 1,
+        matchNumber: 2,
+        bracketPosition: 2,
+        sideAType: p[2]?.type || 'TEAM',
+        sideAId: p[2]?.id || 'TBD',
+        sideAName: p[2]?.name || 'Qualified 3',
+        sideBType: p[5]?.type || 'TEAM',
+        sideBId: p[5]?.id || 'TBD',
+        sideBName: p[5]?.name || 'Qualified 6',
+        status: 'SCHEDULED',
+        nextMatchId: sf2.id,
+        nextMatchSlot: 'A',
+      },
+    });
+
+    const qf3 = await tx.match.create({
+      data: {
+        tournamentId,
+        categoryId,
+        stage: 'KNOCKOUT',
+        round: 'Quarter Finals',
+        roundNumber: 1,
+        matchNumber: 3,
+        bracketPosition: 3,
+        sideAType: p[3]?.type || 'TEAM',
+        sideAId: p[3]?.id || 'TBD',
+        sideAName: p[3]?.name || 'Qualified 4',
+        sideBType: p[4]?.type || 'TEAM',
+        sideBId: p[4]?.id || 'TBD',
+        sideBName: p[4]?.name || 'Qualified 5',
+        status: 'SCHEDULED',
+        nextMatchId: sf2.id,
+        nextMatchSlot: 'B',
+      },
+    });
+
+    return [finalMatch, sf1, sf2, qf1, qf2, qf3];
+  }
+
+  // Count >= 8: Standard 8-team Quarter Final Bracket
+  const finalMatch = await tx.match.create({
+    data: {
       tournamentId,
       categoryId,
       stage: 'KNOCKOUT',
@@ -126,11 +571,11 @@ export function generateKnockoutMatchesStructure(
       sideBId: 'TBD',
       sideBName: 'Winner Semi Final 2',
       status: 'SCHEDULED',
-    };
+    },
+  });
 
-    // Semi Finals
-    const sf1 = {
-      id: `temp_sf1_${Date.now()}`,
+  const sf1 = await tx.match.create({
+    data: {
       tournamentId,
       categoryId,
       stage: 'KNOCKOUT',
@@ -145,11 +590,13 @@ export function generateKnockoutMatchesStructure(
       sideBId: 'TBD',
       sideBName: 'Winner Quarter Final 2',
       status: 'SCHEDULED',
+      nextMatchId: finalMatch.id,
       nextMatchSlot: 'A',
-    };
+    },
+  });
 
-    const sf2 = {
-      id: `temp_sf2_${Date.now()}`,
+  const sf2 = await tx.match.create({
+    data: {
       tournamentId,
       categoryId,
       stage: 'KNOCKOUT',
@@ -164,11 +611,13 @@ export function generateKnockoutMatchesStructure(
       sideBId: 'TBD',
       sideBName: 'Winner Quarter Final 4',
       status: 'SCHEDULED',
+      nextMatchId: finalMatch.id,
       nextMatchSlot: 'B',
-    };
+    },
+  });
 
-    // Quarter Finals
-    const qf1 = {
+  const qf1 = await tx.match.create({
+    data: {
       tournamentId,
       categoryId,
       stage: 'KNOCKOUT',
@@ -179,14 +628,17 @@ export function generateKnockoutMatchesStructure(
       sideAType: p[0]?.type || 'TEAM',
       sideAId: p[0]?.id || 'TBD',
       sideAName: p[0]?.name || 'Qualified 1',
-      sideBType: p[3]?.type || 'TEAM',
-      sideBId: p[3]?.id || 'TBD',
-      sideBName: p[3]?.name || 'Qualified 4',
+      sideBType: p[7]?.type || 'TEAM',
+      sideBId: p[7]?.id || 'TBD',
+      sideBName: p[7]?.name || 'Qualified 8',
       status: 'SCHEDULED',
+      nextMatchId: sf1.id,
       nextMatchSlot: 'A',
-    };
+    },
+  });
 
-    const qf2 = {
+  const qf2 = await tx.match.create({
+    data: {
       tournamentId,
       categoryId,
       stage: 'KNOCKOUT',
@@ -194,17 +646,20 @@ export function generateKnockoutMatchesStructure(
       roundNumber: 1,
       matchNumber: 2,
       bracketPosition: 2,
-      sideAType: p[4]?.type || 'TEAM',
-      sideAId: p[4]?.id || 'TBD',
-      sideAName: p[4]?.name || 'Qualified 5',
-      sideBType: p[7]?.type || 'TEAM',
-      sideBId: p[7]?.id || 'TBD',
-      sideBName: p[7]?.name || 'Qualified 8',
+      sideAType: p[3]?.type || 'TEAM',
+      sideAId: p[3]?.id || 'TBD',
+      sideAName: p[3]?.name || 'Qualified 4',
+      sideBType: p[4]?.type || 'TEAM',
+      sideBId: p[4]?.id || 'TBD',
+      sideBName: p[4]?.name || 'Qualified 5',
       status: 'SCHEDULED',
+      nextMatchId: sf1.id,
       nextMatchSlot: 'B',
-    };
+    },
+  });
 
-    const qf3 = {
+  const qf3 = await tx.match.create({
+    data: {
       tournamentId,
       categoryId,
       stage: 'KNOCKOUT',
@@ -212,17 +667,20 @@ export function generateKnockoutMatchesStructure(
       roundNumber: 1,
       matchNumber: 3,
       bracketPosition: 3,
-      sideAType: p[2]?.type || 'TEAM',
-      sideAId: p[2]?.id || 'TBD',
-      sideAName: p[2]?.name || 'Qualified 3',
-      sideBType: p[1]?.type || 'TEAM',
-      sideBId: p[1]?.id || 'TBD',
-      sideBName: p[1]?.name || 'Qualified 2',
+      sideAType: p[1]?.type || 'TEAM',
+      sideAId: p[1]?.id || 'TBD',
+      sideAName: p[1]?.name || 'Qualified 2',
+      sideBType: p[6]?.type || 'TEAM',
+      sideBId: p[6]?.id || 'TBD',
+      sideBName: p[6]?.name || 'Qualified 7',
       status: 'SCHEDULED',
+      nextMatchId: sf2.id,
       nextMatchSlot: 'A',
-    };
+    },
+  });
 
-    const qf4 = {
+  const qf4 = await tx.match.create({
+    data: {
       tournamentId,
       categoryId,
       stage: 'KNOCKOUT',
@@ -230,196 +688,19 @@ export function generateKnockoutMatchesStructure(
       roundNumber: 1,
       matchNumber: 4,
       bracketPosition: 4,
-      sideAType: p[6]?.type || 'TEAM',
-      sideAId: p[6]?.id || 'TBD',
-      sideAName: p[6]?.name || 'Qualified 7',
+      sideAType: p[2]?.type || 'TEAM',
+      sideAId: p[2]?.id || 'TBD',
+      sideAName: p[2]?.name || 'Qualified 3',
       sideBType: p[5]?.type || 'TEAM',
       sideBId: p[5]?.id || 'TBD',
       sideBName: p[5]?.name || 'Qualified 6',
       status: 'SCHEDULED',
+      nextMatchId: sf2.id,
       nextMatchSlot: 'B',
-    };
+    },
+  });
 
-    return { finalMatch, sf1, sf2, quarterFinals: [qf1, qf2, qf3, qf4] };
-  } else if (count === 4) {
-    // 4 teams: Semi Finals (2 matches) -> Grand Final (1 match)
-    const p = qualifiedTeams;
-
-    const finalMatch = {
-      tournamentId,
-      categoryId,
-      stage: 'KNOCKOUT',
-      round: 'Grand Final',
-      roundNumber: 2,
-      matchNumber: 1,
-      bracketPosition: 1,
-      sideAType: 'PLAYER',
-      sideAId: 'TBD',
-      sideAName: 'Winner Semi Final 1',
-      sideBType: 'PLAYER',
-      sideBId: 'TBD',
-      sideBName: 'Winner Semi Final 2',
-      status: 'SCHEDULED',
-    };
-
-    const sf1 = {
-      tournamentId,
-      categoryId,
-      stage: 'KNOCKOUT',
-      round: 'Semi Finals',
-      roundNumber: 1,
-      matchNumber: 1,
-      bracketPosition: 1,
-      sideAType: p[0]?.type || 'TEAM',
-      sideAId: p[0]?.id || 'TBD',
-      sideAName: p[0]?.name || 'Qualified 1',
-      sideBType: p[3]?.type || 'TEAM',
-      sideBId: p[3]?.id || 'TBD',
-      sideBName: p[3]?.name || 'Qualified 4',
-      status: 'SCHEDULED',
-      nextMatchSlot: 'A',
-    };
-
-    const sf2 = {
-      tournamentId,
-      categoryId,
-      stage: 'KNOCKOUT',
-      round: 'Semi Finals',
-      roundNumber: 1,
-      matchNumber: 2,
-      bracketPosition: 2,
-      sideAType: p[1]?.type || 'TEAM',
-      sideAId: p[1]?.id || 'TBD',
-      sideAName: p[1]?.name || 'Qualified 2',
-      sideBType: p[2]?.type || 'TEAM',
-      sideBId: p[2]?.id || 'TBD',
-      sideBName: p[2]?.name || 'Qualified 3',
-      status: 'SCHEDULED',
-      nextMatchSlot: 'B',
-    };
-
-    return { finalMatch, sf1, sf2 };
-  } else if (count === 6) {
-    // 6 qualified teams: 2 BYEs to Semi Finals + 2 Play-In matches -> 2 SF -> 1 Final
-    const p = qualifiedTeams;
-
-    const finalMatch = {
-      tournamentId,
-      categoryId,
-      stage: 'KNOCKOUT',
-      round: 'Grand Final',
-      roundNumber: 3,
-      matchNumber: 1,
-      bracketPosition: 1,
-      sideAType: 'PLAYER',
-      sideAId: 'TBD',
-      sideAName: 'Winner Semi Final 1',
-      sideBType: 'PLAYER',
-      sideBId: 'TBD',
-      sideBName: 'Winner Semi Final 2',
-      status: 'SCHEDULED',
-    };
-
-    // Semi Finals (p[0] and p[1] get BYE to SF1 Slot A & SF2 Slot A)
-    const sf1 = {
-      tournamentId,
-      categoryId,
-      stage: 'KNOCKOUT',
-      round: 'Semi Finals',
-      roundNumber: 2,
-      matchNumber: 1,
-      bracketPosition: 1,
-      sideAType: p[0].type,
-      sideAId: p[0].id,
-      sideAName: p[0].name,
-      sideBType: 'PLAYER',
-      sideBId: 'TBD',
-      sideBName: 'Winner Play-In 1',
-      status: 'SCHEDULED',
-      nextMatchSlot: 'A',
-    };
-
-    const sf2 = {
-      tournamentId,
-      categoryId,
-      stage: 'KNOCKOUT',
-      round: 'Semi Finals',
-      roundNumber: 2,
-      matchNumber: 2,
-      bracketPosition: 2,
-      sideAType: p[1].type,
-      sideAId: p[1].id,
-      sideAName: p[1].name,
-      sideBType: 'PLAYER',
-      sideBId: 'TBD',
-      sideBName: 'Winner Play-In 2',
-      status: 'SCHEDULED',
-      nextMatchSlot: 'B',
-    };
-
-    // Play-In matches
-    const playIn1 = {
-      tournamentId,
-      categoryId,
-      stage: 'PLAY_IN',
-      round: 'Play-In Round',
-      roundNumber: 1,
-      matchNumber: 1,
-      bracketPosition: 1,
-      sideAType: p[2].type,
-      sideAId: p[2].id,
-      sideAName: p[2].name,
-      sideBType: p[5].type,
-      sideBId: p[5].id,
-      sideBName: p[5].name,
-      status: 'SCHEDULED',
-      nextMatchSlot: 'B',
-    };
-
-    const playIn2 = {
-      tournamentId,
-      categoryId,
-      stage: 'PLAY_IN',
-      round: 'Play-In Round',
-      roundNumber: 1,
-      matchNumber: 2,
-      bracketPosition: 2,
-      sideAType: p[3].type,
-      sideAId: p[3].id,
-      sideAName: p[3].name,
-      sideBType: p[4].type,
-      sideBId: p[4].id,
-      sideBName: p[4].name,
-      status: 'SCHEDULED',
-      nextMatchSlot: 'B',
-    };
-
-    return { finalMatch, sf1, sf2, playIns: [playIn1, playIn2] };
-  } else {
-    // Generic power of 2 bracket fallback (2 or 16 or 32)
-    const p = qualifiedTeams;
-    if (count === 2) {
-      const finalMatch = {
-        tournamentId,
-        categoryId,
-        stage: 'KNOCKOUT',
-        round: 'Grand Final',
-        roundNumber: 1,
-        matchNumber: 1,
-        bracketPosition: 1,
-        sideAType: p[0].type,
-        sideAId: p[0].id,
-        sideAName: p[0].name,
-        sideBType: p[1].type,
-        sideBId: p[1].id,
-        sideBName: p[1].name,
-        status: 'SCHEDULED',
-      };
-      return { finalMatch };
-    }
-  }
-
-  return null;
+  return [finalMatch, sf1, sf2, qf1, qf2, qf3, qf4];
 }
 
 /**
