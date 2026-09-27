@@ -1,6 +1,12 @@
+import { config } from 'dotenv';
+import path from 'path';
 import { PrismaClient } from './generated/prisma';
 
-// Ensure process.env.DATABASE_URL is set before PrismaClient initialization
+// Ensure .env is loaded before PrismaClient initialization
+config({ path: path.resolve(process.cwd(), '.env') });
+config({ path: path.resolve(process.cwd(), '../../.env') });
+config({ path: path.resolve(__dirname, '../../../.env') });
+
 const dbUrl =
   process.env.DATABASE_URL ||
   process.env.POSTGRES_PRISMA_URL ||
@@ -19,14 +25,23 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+const clientOptions: any = {
+  log:
+    process.env.NODE_ENV === 'development'
+      ? ['query', 'warn', 'error']
+      : ['error'],
+};
+
+if (dbUrl) {
+  clientOptions.datasources = {
+    db: {
+      url: dbUrl,
+    },
+  };
+}
+
 export const prisma: PrismaClient =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log:
-      process.env.NODE_ENV === 'development'
-        ? ['query', 'warn', 'error']
-        : ['error'],
-  });
+  globalForPrisma.prisma ?? new PrismaClient(clientOptions);
 
 globalForPrisma.prisma = prisma;
 
