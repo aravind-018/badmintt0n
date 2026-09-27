@@ -113,7 +113,9 @@ export const AdminFixturesPage: React.FC = () => {
       setTeams(tmData.teams || []);
 
       const activeTournId = tData.tournaments?.length > 0 ? tData.tournaments[0].id : '';
-      const activeCatId = categoryFilter || (cData.categories?.length > 0 ? cData.categories[0].id : '');
+      const catWithMatches = cData.categories?.find((c: any) => c._count?.matches > 0);
+      const defaultCatId = catWithMatches ? catWithMatches.id : (cData.categories?.length > 0 ? cData.categories[0].id : '');
+      const activeCatId = categoryFilter || defaultCatId;
 
       if (activeTournId && !tournamentId) setTournamentId(activeTournId);
       if (activeCatId && !categoryId) setCategoryId(activeCatId);

@@ -3,6 +3,14 @@ import { prisma } from '@badminton-live/database';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
 import { advanceBracketWinner } from '../utils/bracket';
 import { z } from 'zod';
+import {
+  distributeTeamsIntoGroups,
+  generateGroupRoundRobinMatches,
+  createKnockoutMatchesInTx,
+  updateGroupStandingsAndQualification,
+  Participant,
+} from '../utils/fixtureGenerator';
+import { logAudit } from '../utils/audit';
 
 export const matchRouter = Router();
 
@@ -150,6 +158,7 @@ matchRouter.get('/group-fixtures', async (req, res) => {
     if (cId) where.categoryId = cId;
     where.OR = [
       { stage: 'GROUP' },
+      { stage: 'GROUP_STAGE' },
       { groupId: { not: null } },
       { round: { startsWith: 'Group' } },
     ];
@@ -378,14 +387,7 @@ matchRouter.delete('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNA
   res.json({ message: 'Match deleted successfully', id });
 });
 
-import {
-  distributeTeamsIntoGroups,
-  generateGroupRoundRobinMatches,
-  createKnockoutMatchesInTx,
-  updateGroupStandingsAndQualification,
-  Participant,
-} from '../utils/fixtureGenerator';
-import { logAudit } from '../utils/audit';
+
 
 // Helper: Get participants (Teams or Player Pairs) for a category in a tournament
 async function getCategoryParticipants(tournamentId: string, categoryId: string): Promise<Participant[]> {

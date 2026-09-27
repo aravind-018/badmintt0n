@@ -922,6 +922,82 @@ export async function updateGroupStandingsAndQualification(
     }
   }
 
+  // If group stage is complete, advance qualified teams into draft knockout matches
+  if (isGroupStageComplete) {
+    try {
+      const qualifiedStandings = await prisma.standing.findMany({
+        where: {
+          tournamentId,
+          categoryId,
+          qualified: true,
+        },
+        include: {
+          team: { select: { id: true, name: true } },
+        },
+      });
+
+      const knockoutMatches = await prisma.match.findMany({
+        where: {
+          tournamentId,
+          categoryId,
+          stage: { in: ['KNOCKOUT', 'PLAY_IN'] },
+        },
+      });
+
+      for (const standing of qualifiedStandings) {
+        const participantId = standing.teamId || standing.playerId;
+        let participantName = standing.team?.name;
+        if (!participantName && standing.playerId) {
+          const pl = await prisma.player.findUnique({ where: { id: standing.playerId }, select: { name: true } });
+          participantName = pl?.name;
+        }
+        const participantType = standing.teamId ? 'TEAM' : 'PLAYER';
+
+        if (!participantId || !participantName) continue;
+
+        const targetLabel = `Qualified ${standing.groupName} #${standing.position}`;
+
+        for (const km of knockoutMatches) {
+          let updated = false;
+          const updateData: any = {};
+
+          if (
+            km.sideAId === 'TBD' &&
+            (km.sideAName === targetLabel || km.sideAName.includes(`${standing.groupName} #${standing.position}`))
+          ) {
+            updateData.sideAId = participantId;
+            updateData.sideAName = participantName;
+            updateData.sideAType = participantType;
+            km.sideAId = participantId;
+            km.sideAName = participantName;
+            updated = true;
+          }
+
+          if (
+            km.sideBId === 'TBD' &&
+            (km.sideBName === targetLabel || km.sideBName.includes(`${standing.groupName} #${standing.position}`))
+          ) {
+            updateData.sideBId = participantId;
+            updateData.sideBName = participantName;
+            updateData.sideBType = participantType;
+            km.sideBId = participantId;
+            km.sideBName = participantName;
+            updated = true;
+          }
+
+          if (updated) {
+            await prisma.match.update({
+              where: { id: km.id },
+              data: updateData,
+            });
+          }
+        }
+      }
+    } catch (bracketErr) {
+      console.error('[Bracket Qualification Error] Failed to populate knockout matches:', bracketErr);
+    }
+  }
+
   return {
     totalMatches,
     completedMatches,

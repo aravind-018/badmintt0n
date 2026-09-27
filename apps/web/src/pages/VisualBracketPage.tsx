@@ -18,24 +18,25 @@ export const VisualBracketPage: React.FC = () => {
   const fetchBracketData = async () => {
     setLoading(true);
     try {
-      const [catRes, matchRes] = await Promise.all([
-        fetch('/api/v1/categories'),
-        fetch(`/api/v1/matches${selectedCategory ? `?categoryId=${selectedCategory}` : ''}`),
-      ]);
-
+      const catRes = await fetch('/api/v1/categories');
       const cData = await catRes.json();
-      const mData = await matchRes.json();
+      const catList = cData.categories || [];
+      setCategories(catList);
 
-      setCategories(cData.categories || []);
-      setMatches(mData.matches || []);
-
-      const activeCat = selectedCategory || (cData.categories?.length > 0 ? cData.categories[0].id : '');
-      if (cData.categories?.length > 0 && !selectedCategory) {
-        setSelectedCategory(cData.categories[0].id);
+      let activeCat = selectedCategory;
+      if (!activeCat && catList.length > 0) {
+        const catWithMatches = catList.find((c: any) => c._count?.matches > 0);
+        activeCat = catWithMatches ? catWithMatches.id : catList[0].id;
+        setSelectedCategory(activeCat);
       }
 
+      const matchUrl = activeCat ? `/api/v1/matches?categoryId=${activeCat}` : '/api/v1/matches';
+      const matchRes = await fetch(matchUrl);
+      const mData = await matchRes.json();
+      setMatches(mData.matches || []);
+
       if (activeCat) {
-        const activeTournId = cData.categories?.find((c: any) => c.id === activeCat)?.tournamentId;
+        const activeTournId = catList.find((c: any) => c.id === activeCat)?.tournamentId;
         if (activeTournId) {
           fetchGroupStandings(activeTournId, activeCat);
         }

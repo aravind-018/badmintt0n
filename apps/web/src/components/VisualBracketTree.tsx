@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, Clock, MapPin, Radio, CheckCircle, Award } from 'lucide-react';
+import { Trophy, Clock, Radio, CheckCircle, Award } from 'lucide-react';
 
 interface Match {
   id: string;
@@ -25,17 +25,47 @@ interface VisualBracketTreeProps {
   onSelectMatch?: (match: Match) => void;
 }
 
+export function formatBracketParticipant(
+  id?: string | null,
+  name?: string | null
+): { displayName: string; isTBD: boolean } {
+  if (!name || !name.trim()) {
+    return { displayName: 'TBD', isTBD: true };
+  }
+
+  const trimmed = name.trim();
+  const lower = trimmed.toLowerCase();
+
+  // Any unassigned slot, TBD ID, or placeholder generator label resolves to clean TBD
+  if (
+    !id ||
+    id === 'TBD' ||
+    trimmed === 'TBD' ||
+    lower.startsWith('qualified') ||
+    lower.startsWith('winner') ||
+    lower.startsWith('runner') ||
+    lower.startsWith('play-in')
+  ) {
+    if (id && id !== 'TBD' && !lower.startsWith('qualified') && !lower.startsWith('winner')) {
+      return { displayName: trimmed, isTBD: false };
+    }
+    return { displayName: 'TBD', isTBD: true };
+  }
+
+  return { displayName: trimmed, isTBD: false };
+}
+
 export const VisualBracketTree: React.FC<VisualBracketTreeProps> = ({ matches, onSelectMatch }) => {
   // Filter knockout & play-in matches
   const knockoutMatches = matches.filter(
-    (m) => m.stage === 'KNOCKOUT' || m.stage === 'PLAY_IN' || !m.stage
+    (m) => m.stage === 'KNOCKOUT' || m.stage === 'PLAY_IN' || (!m.stage && !m.round?.toLowerCase().includes('group'))
   );
 
   if (knockoutMatches.length === 0) {
     return (
       <div className="glass-card p-12 rounded-2xl text-center space-y-3">
         <Trophy className="w-12 h-12 text-slate-600 mx-auto" />
-        <h3 className="text-lg font-bold text-white">No Bracket Matches Generated</h3>
+        <h3 className="text-lg font-bold text-white">No Knockout Fixtures Scheduled</h3>
         <p className="text-slate-400 text-xs">Generate fixtures to build the visual knockout bracket.</p>
       </div>
     );
@@ -45,6 +75,11 @@ export const VisualBracketTree: React.FC<VisualBracketTreeProps> = ({ matches, o
   const playInMatches = knockoutMatches.filter(
     (m) => m.stage === 'PLAY_IN' || m.round?.toLowerCase().includes('play-in')
   );
+  const roundOf16Matches = knockoutMatches.filter(
+    (m) =>
+      m.stage === 'KNOCKOUT' &&
+      (m.round?.toLowerCase().includes('round of 16') || m.round?.toLowerCase().includes('pre-quarter'))
+  );
   const qfMatches = knockoutMatches.filter(
     (m) => m.stage === 'KNOCKOUT' && m.round?.toLowerCase().includes('quarter')
   );
@@ -52,7 +87,11 @@ export const VisualBracketTree: React.FC<VisualBracketTreeProps> = ({ matches, o
     (m) => m.stage === 'KNOCKOUT' && m.round?.toLowerCase().includes('semi')
   );
   const finalMatches = knockoutMatches.filter(
-    (m) => m.stage === 'KNOCKOUT' && (m.round?.toLowerCase().includes('final') && !m.round?.toLowerCase().includes('semi') && !m.round?.toLowerCase().includes('quarter'))
+    (m) =>
+      m.stage === 'KNOCKOUT' &&
+      m.round?.toLowerCase().includes('final') &&
+      !m.round?.toLowerCase().includes('semi') &&
+      !m.round?.toLowerCase().includes('quarter')
   );
 
   // Fallback round grouping if custom names were used
@@ -65,17 +104,26 @@ export const VisualBracketTree: React.FC<VisualBracketTreeProps> = ({ matches, o
 
   const structuredRounds = [
     { title: 'PLAY-IN ROUND', matches: playInMatches, color: 'text-purple-400 border-purple-500/30' },
+    { title: 'ROUND OF 16', matches: roundOf16Matches, color: 'text-indigo-400 border-indigo-500/30' },
     { title: 'QUARTER FINALS', matches: qfMatches, color: 'text-brand-400 border-brand-500/30' },
     { title: 'SEMI FINALS', matches: sfMatches, color: 'text-accent-cyan border-accent-cyan/30' },
-    { title: 'GRAND CHAMPIONSHIP FINAL', matches: finalMatches, color: 'text-accent-amber border-accent-amber/30', isFinal: true },
+    {
+      title: 'GRAND CHAMPIONSHIP FINAL',
+      matches: finalMatches,
+      color: 'text-accent-amber border-accent-amber/30',
+      isFinal: true,
+    },
   ].filter((r) => r.matches.length > 0);
 
-  const roundsToDisplay = structuredRounds.length > 0 ? structuredRounds : Array.from(roundsMap.entries()).map(([title, mList]) => ({
-    title: title.toUpperCase(),
-    matches: mList,
-    color: 'text-brand-400 border-brand-500/30',
-    isFinal: title.toLowerCase().includes('final'),
-  }));
+  const roundsToDisplay =
+    structuredRounds.length > 0
+      ? structuredRounds
+      : Array.from(roundsMap.entries()).map(([title, mList]) => ({
+          title: title.toUpperCase(),
+          matches: mList,
+          color: 'text-brand-400 border-brand-500/30',
+          isFinal: title.toLowerCase().includes('final'),
+        }));
 
   return (
     <div className="space-y-6">
@@ -91,7 +139,7 @@ export const VisualBracketTree: React.FC<VisualBracketTreeProps> = ({ matches, o
           className="flex items-stretch gap-8 min-w-[768px] lg:min-w-[1024px] px-2"
           style={{ width: `${Math.max(roundsToDisplay.length * 300, 900)}px` }}
         >
-          {roundsToDisplay.map((roundGroup, colIndex) => (
+          {roundsToDisplay.map((roundGroup) => (
             <div key={roundGroup.title} className="flex-1 flex flex-col space-y-6">
               {/* Round Title Header */}
               <div
@@ -127,8 +175,11 @@ interface BracketMatchCardProps {
 }
 
 const BracketMatchCard: React.FC<BracketMatchCardProps> = ({ match, isFinal, onSelect }) => {
-  const isSideAWinner = match.winnerId && match.winnerId === match.sideAId && match.sideAId !== 'TBD';
-  const isSideBWinner = match.winnerId && match.winnerId === match.sideBId && match.sideBId !== 'TBD';
+  const sideA = formatBracketParticipant(match.sideAId, match.sideAName);
+  const sideB = formatBracketParticipant(match.sideBId, match.sideBName);
+
+  const isSideAWinner = !sideA.isTBD && match.winnerId && match.winnerId === match.sideAId;
+  const isSideBWinner = !sideB.isTBD && match.winnerId && match.winnerId === match.sideBId;
   const isLive = match.status === 'LIVE';
   const isCompleted = match.status === 'COMPLETED' || match.status === 'WALKOVER' || match.status === 'RETIRED';
 
@@ -156,7 +207,10 @@ const BracketMatchCard: React.FC<BracketMatchCardProps> = ({ match, isFinal, onS
       {/* Top Card Info Bar */}
       <div className="flex items-center justify-between text-[11px] text-slate-400 border-b border-slate-800 pb-1.5">
         <span className="font-semibold text-slate-300 truncate max-w-[130px]">
-          {match.court?.name || (match.scheduledAt ? new Date(match.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Unscheduled')}
+          {match.court?.name ||
+            (match.scheduledAt
+              ? new Date(match.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : 'Unscheduled')}
         </span>
         <span
           className={`font-bold px-2 py-0.5 rounded-full text-[10px] flex items-center gap-1 ${
@@ -188,11 +242,17 @@ const BracketMatchCard: React.FC<BracketMatchCardProps> = ({ match, isFinal, onS
             ) : (
               <span className="w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0" />
             )}
-            <span className={`truncate ${match.sideAId === 'TBD' ? 'text-slate-500 italic font-normal' : ''}`}>
-              {match.sideAName}
+            <span
+              className={`truncate ${
+                sideA.isTBD ? 'text-slate-500 italic font-normal tracking-wide' : 'text-slate-100 font-bold'
+              }`}
+            >
+              {sideA.displayName}
             </span>
           </div>
-          {setScoreDisplayA !== '' && <span className="font-mono text-sm font-extrabold text-white shrink-0 ml-1">{setScoreDisplayA}</span>}
+          {setScoreDisplayA !== '' && (
+            <span className="font-mono text-sm font-extrabold text-white shrink-0 ml-1">{setScoreDisplayA}</span>
+          )}
         </div>
 
         {/* Side B */}
@@ -209,11 +269,17 @@ const BracketMatchCard: React.FC<BracketMatchCardProps> = ({ match, isFinal, onS
             ) : (
               <span className="w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0" />
             )}
-            <span className={`truncate ${match.sideBId === 'TBD' ? 'text-slate-500 italic font-normal' : ''}`}>
-              {match.sideBName}
+            <span
+              className={`truncate ${
+                sideB.isTBD ? 'text-slate-500 italic font-normal tracking-wide' : 'text-slate-100 font-bold'
+              }`}
+            >
+              {sideB.displayName}
             </span>
           </div>
-          {setScoreDisplayB !== '' && <span className="font-mono text-sm font-extrabold text-white shrink-0 ml-1">{setScoreDisplayB}</span>}
+          {setScoreDisplayB !== '' && (
+            <span className="font-mono text-sm font-extrabold text-white shrink-0 ml-1">{setScoreDisplayB}</span>
+          )}
         </div>
       </div>
 
