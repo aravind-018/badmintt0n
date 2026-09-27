@@ -11,7 +11,28 @@ const SOCKET_URL = getSocketUrl();
 
 let socket: Socket | null = null;
 
+const isServerlessProd =
+  import.meta.env.PROD &&
+  !import.meta.env.VITE_SOCKET_URL &&
+  typeof window !== 'undefined' &&
+  (window.location.hostname.includes('vercel.app') || window.location.hostname !== 'localhost');
+
+const mockSocket: any = {
+  connected: false,
+  id: undefined,
+  on: () => mockSocket,
+  off: () => mockSocket,
+  emit: () => mockSocket,
+  once: () => mockSocket,
+  connect: () => mockSocket,
+  disconnect: () => mockSocket,
+};
+
 export function getSocket(): Socket {
+  if (isServerlessProd) {
+    return mockSocket as Socket;
+  }
+
   if (!socket) {
     socket = io(SOCKET_URL, {
       autoConnect: true,
@@ -29,18 +50,13 @@ export function getSocket(): Socket {
 
     socket.on('disconnect', (reason) => {
       console.log(`[Socket.IO] Disconnected: ${reason}`);
-      // Auto-reconnect unless server explicitly closed the connection
       if (reason === 'io server disconnect') {
         socket?.connect();
       }
     });
 
     socket.on('connect_error', (error) => {
-      if (import.meta.env.PROD) {
-        console.debug('[Socket.IO] Real-time socket unavailable, using REST fallback');
-      } else {
-        console.warn('[Socket.IO] Connection error:', error.message);
-      }
+      console.debug('[Socket.IO] Real-time socket unavailable, using REST fallback:', error.message);
     });
 
     socket.on('reconnect', (attempt) => {
