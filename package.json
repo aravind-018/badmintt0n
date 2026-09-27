@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "concurrently --names \"API,WEB\" --prefix-colors \"cyan,green\" \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/web\"",
     "build:packages": "npm run build --workspace=packages/shared && npm run build --workspace=packages/scoring && npm run build --workspace=packages/database",
-    "build": "npm run build:packages && npm run build --workspace=apps/api && npm run build --workspace=apps/web && node -e \"const fs=require('fs'); if(!fs.existsSync('dist')) fs.mkdirSync('dist', {recursive: true}); fs.cpSync('apps/web/dist', 'dist', {recursive: true}); fs.cpSync('apps/api/dist', 'dist', {recursive: true});\" && node scripts/prepare-vercel-dist.js",
+    "build": "npm run build:packages && npm run build --workspace=apps/api && npm run build --workspace=apps/web && node -e \"const fs=require('fs'); if(!fs.existsSync('dist')) fs.mkdirSync('dist', {recursive: true}); fs.cpSync('apps/api/dist', 'dist', {recursive: true}); fs.cpSync('apps/web/dist', 'dist', {recursive: true});\" && node scripts/prepare-vercel-dist.js",
     "vercel-build": "npm run build",
     "postinstall": "npm run db:generate",
     "lint": "eslint .",
