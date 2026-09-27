@@ -56,9 +56,14 @@ export function formatBracketParticipant(
 }
 
 export const VisualBracketTree: React.FC<VisualBracketTreeProps> = ({ matches, onSelectMatch }) => {
-  // Filter knockout & play-in matches
+  // Filter knockout & play-in matches — exclude GROUP_STAGE and ROUND_ROBIN
   const knockoutMatches = matches.filter(
-    (m) => m.stage === 'KNOCKOUT' || m.stage === 'PLAY_IN' || (!m.stage && !m.round?.toLowerCase().includes('group'))
+    (m) =>
+      m.stage === 'KNOCKOUT' ||
+      m.stage === 'PLAY_IN' ||
+      (!m.stage &&
+        !m.round?.toLowerCase().includes('group') &&
+        !m.round?.toLowerCase().includes('round robin'))
   );
 
   if (knockoutMatches.length === 0) {

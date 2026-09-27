@@ -89,6 +89,47 @@ export function generateGroupRoundRobinMatches(
 }
 
 /**
+ * Generates Normal Round Robin matches for ALL participants in a single pool.
+ * Every participant plays every other participant exactly once.
+ * No groups, no knockout — pure league format.
+ * Total matches = n * (n - 1) / 2
+ */
+export function generateNormalRoundRobinMatches(
+  tournamentId: string,
+  categoryId: string,
+  participants: Participant[]
+) {
+  const matches: any[] = [];
+  let matchNum = 1;
+
+  for (let i = 0; i < participants.length; i++) {
+    for (let j = i + 1; j < participants.length; j++) {
+      matches.push({
+        tournamentId,
+        categoryId,
+        stage: 'ROUND_ROBIN',
+        groupId: 'round_robin',
+        groupName: 'Round Robin',
+        groupOrder: 1,
+        round: `Round Robin - Match ${matchNum}`,
+        roundNumber: 1,
+        matchNumber: matchNum,
+        sideAType: participants[i].type,
+        sideAId: participants[i].id,
+        sideAName: participants[i].name,
+        sideBType: participants[j].type,
+        sideBId: participants[j].id,
+        sideBName: participants[j].name,
+        status: 'SCHEDULED',
+      });
+      matchNum++;
+    }
+  }
+
+  return matches;
+}
+
+/**
  * Generates and saves a linked knockout bracket tree inside a Prisma transaction for any team count.
  */
 export async function createKnockoutMatchesInTx(
@@ -714,9 +755,9 @@ export async function updateGroupStandingsAndQualification(
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
   const topN = category?.qualificationRule === 'TOP_1' ? 1 : 2;
 
-  // Fetch all group stage matches for this category
+  // Fetch all group/round-robin stage matches for this category
   const matches = await prisma.match.findMany({
-    where: { tournamentId, categoryId, stage: 'GROUP_STAGE' },
+    where: { tournamentId, categoryId, stage: { in: ['GROUP_STAGE', 'ROUND_ROBIN'] } },
     include: { games: true },
   });
 

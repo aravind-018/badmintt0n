@@ -55,6 +55,8 @@ export const AdminFixturesPage: React.FC = () => {
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isGeneratorModalOpen, setIsGeneratorModalOpen] = useState(false);
+  const [generatorStep, setGeneratorStep] = useState<'FORMAT_SELECT' | 'PREVIEW'>('FORMAT_SELECT');
+  const [selectedFormat, setSelectedFormat] = useState<'ROUND_ROBIN' | 'GROUP_STAGE' | 'KNOCKOUT' | ''>('');
   const [generatorPreview, setGeneratorPreview] = useState<any | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -276,13 +278,22 @@ export const AdminFixturesPage: React.FC = () => {
     }
   };
 
-  const openGeneratorModal = async () => {
+  const openGeneratorModal = () => {
     if (!tournamentId || !categoryId) {
       showToast('Please select a Tournament and Category first', 'error');
       return;
     }
 
     setIsGeneratorModalOpen(true);
+    setGeneratorStep('FORMAT_SELECT');
+    setSelectedFormat('');
+    setGeneratorPreview(null);
+    setConfirmGenerateChecked(false);
+  };
+
+  const loadPreviewForFormat = async (fmt: 'ROUND_ROBIN' | 'GROUP_STAGE' | 'KNOCKOUT') => {
+    setSelectedFormat(fmt);
+    setGeneratorStep('PREVIEW');
     setIsPreviewLoading(true);
     setGeneratorPreview(null);
     setConfirmGenerateChecked(false);
@@ -294,7 +305,11 @@ export const AdminFixturesPage: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ tournamentId, categoryId }),
+        body: JSON.stringify({
+          tournamentId,
+          categoryId,
+          format: fmt === 'GROUP_STAGE' ? 'GROUP_KNOCKOUT' : fmt,
+        }),
       });
 
       const data = await res.json();
@@ -302,18 +317,26 @@ export const AdminFixturesPage: React.FC = () => {
         setGeneratorPreview(data.preview);
       } else {
         showToast(data.error || 'Failed to load fixture preview', 'error');
+        setGeneratorStep('FORMAT_SELECT');
       }
     } catch (err) {
       showToast('Network error while loading preview', 'error');
+      setGeneratorStep('FORMAT_SELECT');
     } finally {
       setIsPreviewLoading(false);
     }
   };
 
-  const handleConfirmGenerateFixtures = async (confirmRegenerate = false, forceFormat?: string) => {
+  const handleConfirmGenerateFixtures = async (confirmRegenerate = false) => {
     if (isGenerating) return;
 
-    if ((forceFormat === 'GROUP_STAGE' || forceFormat === 'GROUP_KNOCKOUT') && generatorPreview?.totalTeams < 6) {
+    const apiFormat =
+      selectedFormat === 'GROUP_STAGE' ? 'GROUP_KNOCKOUT' :
+      selectedFormat === 'ROUND_ROBIN' ? 'ROUND_ROBIN' :
+      selectedFormat === 'KNOCKOUT' ? 'KNOCKOUT' :
+      (generatorPreview?.totalTeams >= 6 ? 'GROUP_KNOCKOUT' : 'KNOCKOUT');
+
+    if (apiFormat === 'GROUP_KNOCKOUT' && generatorPreview?.totalTeams < 6) {
       showToast('Group Stage requires at least 6 teams.', 'error');
       return;
     }
@@ -330,7 +353,7 @@ export const AdminFixturesPage: React.FC = () => {
           tournamentId,
           categoryId,
           confirmRegenerate,
-          format: forceFormat || (generatorPreview?.totalTeams >= 6 ? 'GROUP_KNOCKOUT' : 'KNOCKOUT'),
+          format: apiFormat,
         }),
       });
 
@@ -797,177 +820,327 @@ export const AdminFixturesPage: React.FC = () => {
         </div>
       )}
 
-      {/* Fixture Generator & Preview Modal */}
+      {/* Fixture Generator Modal — 2-step: Format Select → Preview */}
       {isGeneratorModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card max-w-lg w-full p-6 rounded-2xl space-y-5 shadow-2xl border border-amber-500/30 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Zap className="w-5 h-5 text-accent-amber" /> Fixture Generator Preview
-              </h3>
-              <button type="button" onClick={() => setIsGeneratorModalOpen(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+          <div className="glass-card max-w-lg w-full p-6 rounded-2xl shadow-2xl border border-amber-500/30 max-h-[90vh] overflow-y-auto">
 
-            {isPreviewLoading ? (
-              <div className="py-12 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-accent-amber" /> Analyzing tournament format & team counts...
-              </div>
-            ) : generatorPreview ? (
-              <div className="space-y-4 text-xs">
-                {/* Eligibility / Status Banner */}
-                {generatorPreview.totalTeams >= 6 ? (
-                  <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
-                        <CheckCircle2 className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h4 className="text-emerald-400 font-extrabold text-xs">Group Stage enabled</h4>
-                        <p className="text-slate-400 text-[11px]">Round Robin (max 3 teams/group) + Qualification Knockout</p>
-                      </div>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px] tracking-wide uppercase border border-emerald-500/40">
-                      {generatorPreview.numberOfGroups} Groups
-                    </span>
-                  </div>
-                ) : (
-                  <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-accent-amber flex items-center justify-center font-bold shrink-0 mt-0.5">
-                      <AlertTriangle className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h4 className="text-accent-amber font-extrabold text-xs">Group Stage requires a minimum of 6 teams.</h4>
-                      <p className="text-slate-300 text-[11px] mt-0.5">
-                        Only {generatorPreview.totalTeams} {generatorPreview.totalTeams === 1 ? 'team is' : 'teams are'} registered. Standard single knockout format will be generated instead.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Format Summary Card */}
-                <div className="p-4 rounded-xl bg-dark-800 border border-slate-700 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Tournament Format:</span>
-                    <span className={`font-extrabold uppercase ${generatorPreview.totalTeams >= 6 ? 'text-brand-400' : 'text-accent-cyan'}`}>
-                      {generatorPreview.totalTeams >= 6
-                        ? 'GROUP STAGE + KNOCKOUT'
-                        : 'SINGLE KNOCKOUT BRACKET'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Total Registered Teams:</span>
-                    <span className="font-bold text-white">{generatorPreview.totalTeams} teams</span>
-                  </div>
-                  {generatorPreview.totalTeams >= 6 ? (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400">Number of Groups (max 3 per group):</span>
-                        <span className="font-bold text-accent-cyan">{generatorPreview.numberOfGroups} Groups</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400">Total Group Fixtures:</span>
-                        <span className="font-bold text-amber-400">{generatorPreview.totalGroupMatches} matches</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400">Qualification Setting:</span>
-                        <span className="font-bold text-emerald-400">{generatorPreview.qualificationRule}</span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Format Option:</span>
-                      <span className="font-semibold text-slate-300">Normal Tournament Knockout Format</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Knockout Structure:</span>
-                    <span className="font-bold text-white">{generatorPreview.knockoutStructure}</span>
-                  </div>
+            {/* ── STEP 1: FORMAT SELECTION ── */}
+            {generatorStep === 'FORMAT_SELECT' && (
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-accent-amber" /> Choose Tournament Format
+                  </h3>
+                  <button type="button" onClick={() => setIsGeneratorModalOpen(false)} className="text-slate-400 hover:text-white">
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
 
-                {/* Groups Breakdown (when totalTeams >= 6) */}
-                {generatorPreview.totalTeams >= 6 && generatorPreview.groups?.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-slate-300 text-xs uppercase tracking-wider">Group Distribution:</h4>
-                      <span className="text-[10px] text-slate-400">Single Round Robin (max 3/group)</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {generatorPreview.groups.map((g: any) => (
-                        <div key={g.id} className="p-3 rounded-xl bg-dark-900 border border-slate-800 text-[11px]">
-                          <div className="font-bold text-white flex justify-between items-center">
-                            <span>{g.name}</span>
-                            <span className="px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-400 text-[10px] font-bold">
-                              {g.teamCount} teams · {g.matchesCount} match{g.matchesCount === 1 ? '' : 'es'}
-                            </span>
-                          </div>
-                          <p className="text-slate-400 mt-1 truncate">{g.teamNames.join(', ')}</p>
+                <p className="text-slate-400 text-xs">
+                  Select how fixtures should be generated for <span className="text-white font-semibold">{categories.find(c => c.id === categoryId)?.type?.replace(/_/g, ' ') || 'this category'}</span>.
+                </p>
+
+                <div className="space-y-3">
+                  {/* Option 1: Normal Round Robin */}
+                  <button
+                    type="button"
+                    onClick={() => loadPreviewForFormat('ROUND_ROBIN')}
+                    className="w-full text-left p-4 rounded-2xl bg-dark-800 border border-slate-700 hover:border-brand-500/60 hover:bg-dark-700 transition group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-brand-500/15 text-brand-400 flex items-center justify-center shrink-0 group-hover:bg-brand-500/25 transition">
+                        <List className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-white text-sm">1. Normal Round Robin</span>
+                          <span className="px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 text-[10px] font-bold border border-brand-500/30 uppercase">League</span>
                         </div>
-                      ))}
+                        <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                          Every team plays every other team exactly once in a single pool. No knockout — final standings determine the winner.
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  </button>
 
-                {/* Existing Fixtures Warning */}
-                {generatorPreview.fixturesExist && (
-                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <div>
-                      <strong>Fixtures already exist for this tournament/category ({generatorPreview.existingMatchesCount} matches).</strong>
-                      <p className="mt-0.5 text-[11px] text-amber-200/80">Regenerating will rebuild the schedule and reset group standings.</p>
+                  {/* Option 2: Group Stage */}
+                  <button
+                    type="button"
+                    onClick={() => loadPreviewForFormat('GROUP_STAGE')}
+                    className="w-full text-left p-4 rounded-2xl bg-dark-800 border border-slate-700 hover:border-emerald-500/60 hover:bg-dark-700 transition group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0 group-hover:bg-emerald-500/25 transition">
+                        <Shield className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-white text-sm">2. Group Stage</span>
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/30 uppercase">Groups + KO</span>
+                        </div>
+                        <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                          Teams split into groups (max 3/group) for round-robin play. Top teams qualify for the knockout bracket. <span className="text-amber-400 font-semibold">Requires ≥ 6 teams.</span>
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  </button>
 
-                {/* Required Confirmation Checkbox */}
-                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-dark-800/90 border border-slate-700/80 cursor-pointer select-none hover:border-slate-600 transition">
-                  <input
-                    type="checkbox"
-                    checked={confirmGenerateChecked}
-                    onChange={(e) => setConfirmGenerateChecked(e.target.checked)}
-                    className="mt-0.5 rounded border-slate-700 text-brand-500 focus:ring-brand-500 cursor-pointer"
-                  />
-                  <span className="text-slate-300 text-xs leading-relaxed">
-                    I confirm that I want to generate{' '}
-                    <strong className="text-white">
-                      {generatorPreview.totalTeams >= 6 ? 'Group Stage + Knockout' : 'Normal Single Knockout'}
-                    </strong>{' '}
-                    fixtures for {generatorPreview.totalTeams} registered teams.
-                  </span>
-                </label>
+                  {/* Option 3: Complete Knockout */}
+                  <button
+                    type="button"
+                    onClick={() => loadPreviewForFormat('KNOCKOUT')}
+                    className="w-full text-left p-4 rounded-2xl bg-dark-800 border border-slate-700 hover:border-accent-cyan/60 hover:bg-dark-700 transition group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-cyan-500/15 text-accent-cyan flex items-center justify-center shrink-0 group-hover:bg-cyan-500/25 transition">
+                        <Layers className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-white text-sm">3. Complete Knockout</span>
+                          <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-accent-cyan text-[10px] font-bold border border-cyan-500/30 uppercase">Bracket</span>
+                        </div>
+                        <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                          All teams placed directly into a single-elimination knockout bracket. Lose once and you're out.
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                </div>
 
-                <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-800">
+                <div className="pt-2 flex justify-end border-t border-slate-800">
                   <button
                     type="button"
                     onClick={() => setIsGeneratorModalOpen(false)}
                     className="px-4 py-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs"
-                    disabled={isGenerating}
                   >
                     Cancel
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => handleConfirmGenerateFixtures(generatorPreview.fixturesExist)}
-                    disabled={isGenerating || !confirmGenerateChecked}
-                    className="px-4 py-2.5 rounded-xl bg-accent-amber hover:bg-amber-600 text-dark-900 font-extrabold text-xs flex items-center gap-2 shadow-lg glow-cyan disabled:opacity-40 disabled:cursor-not-allowed transition"
-                  >
-                    {isGenerating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    {generatorPreview.fixturesExist
-                      ? generatorPreview.totalTeams >= 6
-                        ? 'Regenerate Group Stage & Knockout'
-                        : 'Regenerate Knockout Fixtures'
-                      : generatorPreview.totalTeams >= 6
-                      ? 'Generate Group Stage & Knockout'
-                      : 'Generate Knockout Fixtures'}
-                  </button>
                 </div>
               </div>
-            ) : null}
+            )}
+
+            {/* ── STEP 2: PREVIEW + CONFIRM ── */}
+            {generatorStep === 'PREVIEW' && (
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-accent-amber" /> Fixture Preview
+                  </h3>
+                  <button type="button" onClick={() => setIsGeneratorModalOpen(false)} className="text-slate-400 hover:text-white">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Back button */}
+                <button
+                  type="button"
+                  onClick={() => { setGeneratorStep('FORMAT_SELECT'); setGeneratorPreview(null); }}
+                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition"
+                >
+                  ← Back to format selection
+                </button>
+
+                {isPreviewLoading ? (
+                  <div className="py-12 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-accent-amber" /> Analyzing tournament & team counts...
+                  </div>
+                ) : generatorPreview ? (
+                  <div className="space-y-4 text-xs">
+
+                    {/* Format Badge Banner */}
+                    <div className={`p-3.5 rounded-xl flex items-center justify-between ${
+                      selectedFormat === 'ROUND_ROBIN'
+                        ? 'bg-brand-500/10 border border-brand-500/30'
+                        : selectedFormat === 'GROUP_STAGE'
+                        ? 'bg-emerald-500/10 border border-emerald-500/30'
+                        : 'bg-cyan-500/10 border border-cyan-500/30'
+                    }`}>
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                          selectedFormat === 'ROUND_ROBIN' ? 'bg-brand-500/20 text-brand-400' :
+                          selectedFormat === 'GROUP_STAGE' ? 'bg-emerald-500/20 text-emerald-400' :
+                          'bg-cyan-500/20 text-accent-cyan'
+                        }`}>
+                          {selectedFormat === 'ROUND_ROBIN' ? <List className="w-4 h-4" /> :
+                           selectedFormat === 'GROUP_STAGE' ? <Shield className="w-4 h-4" /> :
+                           <Layers className="w-4 h-4" />}
+                        </div>
+                        <div>
+                          <h4 className={`font-extrabold text-xs ${
+                            selectedFormat === 'ROUND_ROBIN' ? 'text-brand-400' :
+                            selectedFormat === 'GROUP_STAGE' ? 'text-emerald-400' : 'text-accent-cyan'
+                          }`}>
+                            {selectedFormat === 'ROUND_ROBIN' ? 'Normal Round Robin' :
+                             selectedFormat === 'GROUP_STAGE' ? 'Group Stage + Knockout' : 'Complete Knockout'}
+                          </h4>
+                          <p className="text-slate-400 text-[11px]">
+                            {selectedFormat === 'ROUND_ROBIN' ? 'All teams in one pool — no knockout' :
+                             selectedFormat === 'GROUP_STAGE' ? `${generatorPreview.numberOfGroups} groups · top teams advance` :
+                             'Single-elimination bracket'}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full border font-bold text-[10px] tracking-wide uppercase bg-dark-800 text-slate-300 border-slate-700">
+                        {generatorPreview.totalTeams} teams
+                      </span>
+                    </div>
+
+                    {/* Format Summary Card */}
+                    <div className="p-4 rounded-xl bg-dark-800 border border-slate-700 space-y-2">
+                      {selectedFormat === 'ROUND_ROBIN' && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Format:</span>
+                            <span className="font-extrabold text-brand-400 uppercase">Normal Round Robin</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Total Registered Teams:</span>
+                            <span className="font-bold text-white">{generatorPreview.totalTeams} teams</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Total Matches:</span>
+                            <span className="font-bold text-amber-400">{generatorPreview.totalRoundRobinMatches} matches</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Knockout Phase:</span>
+                            <span className="font-semibold text-slate-400">None — League standings only</span>
+                          </div>
+                        </>
+                      )}
+
+                      {selectedFormat === 'GROUP_STAGE' && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Format:</span>
+                            <span className="font-extrabold text-emerald-400 uppercase">Group Stage + Knockout</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Total Registered Teams:</span>
+                            <span className="font-bold text-white">{generatorPreview.totalTeams} teams</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Number of Groups (max 3/group):</span>
+                            <span className="font-bold text-accent-cyan">{generatorPreview.numberOfGroups} Groups</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Total Group Fixtures:</span>
+                            <span className="font-bold text-amber-400">{generatorPreview.totalGroupMatches} matches</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Qualification:</span>
+                            <span className="font-bold text-emerald-400">{generatorPreview.qualificationRule}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Knockout Structure:</span>
+                            <span className="font-bold text-white">{generatorPreview.knockoutStructure}</span>
+                          </div>
+                        </>
+                      )}
+
+                      {selectedFormat === 'KNOCKOUT' && (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Format:</span>
+                            <span className="font-extrabold text-accent-cyan uppercase">Complete Knockout</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Total Registered Teams:</span>
+                            <span className="font-bold text-white">{generatorPreview.totalTeams} teams</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Bracket Structure:</span>
+                            <span className="font-bold text-white">{generatorPreview.knockoutStructure}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Group Stage:</span>
+                            <span className="font-semibold text-slate-400">None — Direct bracket</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Groups Breakdown (Group Stage only) */}
+                    {selectedFormat === 'GROUP_STAGE' && generatorPreview.groups?.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="font-bold text-slate-300 text-xs uppercase tracking-wider">Group Distribution:</h4>
+                          <span className="text-[10px] text-slate-400">Single Round Robin (max 3/group)</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {generatorPreview.groups.map((g: any) => (
+                            <div key={g.id} className="p-3 rounded-xl bg-dark-900 border border-slate-800 text-[11px]">
+                              <div className="font-bold text-white flex justify-between items-center">
+                                <span>{g.name}</span>
+                                <span className="px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-400 text-[10px] font-bold">
+                                  {g.teamCount} teams · {g.matchesCount} match{g.matchesCount === 1 ? '' : 'es'}
+                                </span>
+                              </div>
+                              <p className="text-slate-400 mt-1 truncate">{g.teamNames.join(', ')}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Existing Fixtures Warning */}
+                    {generatorPreview.fixturesExist && (
+                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div>
+                          <strong>Fixtures already exist for this tournament/category ({generatorPreview.existingMatchesCount} matches).</strong>
+                          <p className="mt-0.5 text-[11px] text-amber-200/80">Regenerating will delete existing fixtures and reset standings.</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Required Confirmation Checkbox */}
+                    <label className="flex items-start gap-2.5 p-3 rounded-xl bg-dark-800/90 border border-slate-700/80 cursor-pointer select-none hover:border-slate-600 transition">
+                      <input
+                        type="checkbox"
+                        checked={confirmGenerateChecked}
+                        onChange={(e) => setConfirmGenerateChecked(e.target.checked)}
+                        className="mt-0.5 rounded border-slate-700 text-brand-500 focus:ring-brand-500 cursor-pointer"
+                      />
+                      <span className="text-slate-300 text-xs leading-relaxed">
+                        I confirm that I want to generate{' '}
+                        <strong className="text-white">
+                          {selectedFormat === 'ROUND_ROBIN' ? 'Normal Round Robin' :
+                           selectedFormat === 'GROUP_STAGE' ? 'Group Stage + Knockout' : 'Complete Knockout'}
+                        </strong>{' '}
+                        fixtures for {generatorPreview.totalTeams} registered teams.
+                      </span>
+                    </label>
+
+                    <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setIsGeneratorModalOpen(false)}
+                        className="px-4 py-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs"
+                        disabled={isGenerating}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmGenerateFixtures(generatorPreview.fixturesExist)}
+                        disabled={isGenerating || !confirmGenerateChecked}
+                        className="px-4 py-2.5 rounded-xl bg-accent-amber hover:bg-amber-600 text-dark-900 font-extrabold text-xs flex items-center gap-2 shadow-lg glow-cyan disabled:opacity-40 disabled:cursor-not-allowed transition"
+                      >
+                        {isGenerating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {generatorPreview.fixturesExist ? 'Regenerate Fixtures' : 'Generate Fixtures'}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
           </div>
         </div>
       )}
+
 
       {/* Delete Single Match Confirmation Modal */}
       <ConfirmModal
