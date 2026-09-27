@@ -4,7 +4,7 @@ import { AdminLayout } from '../../components/AdminLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
-import { VisualBracketTree } from '../../components/VisualBracketTree';
+import { VisualBracketTree, formatBracketParticipant } from '../../components/VisualBracketTree';
 import { GroupStageView } from '../../components/GroupStageView';
 import {
   Calendar,
@@ -590,9 +590,13 @@ export const AdminFixturesPage: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-4 text-base font-bold text-white py-1">
-                      <span className={m.winnerId === m.sideAId ? 'text-brand-400 font-extrabold' : ''}>{m.sideAName}</span>
+                      <span className={m.winnerId === m.sideAId ? 'text-brand-400 font-extrabold' : ''}>
+                        {formatBracketParticipant(m.sideAId, m.sideAName).displayName}
+                      </span>
                       <span className="text-slate-500 text-xs font-normal">vs</span>
-                      <span className={m.winnerId === m.sideBId ? 'text-brand-400 font-extrabold' : ''}>{m.sideBName}</span>
+                      <span className={m.winnerId === m.sideBId ? 'text-brand-400 font-extrabold' : ''}>
+                        {formatBracketParticipant(m.sideBId, m.sideBName).displayName}
+                      </span>
                     </div>
                   </div>
 

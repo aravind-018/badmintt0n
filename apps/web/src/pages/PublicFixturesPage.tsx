@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy, Calendar, Search, Filter, Clock, MapPin, Layers, Radio, Shield, ChevronRight } from 'lucide-react';
+import { formatBracketParticipant } from '../components/VisualBracketTree';
 
 export const PublicFixturesPage: React.FC = () => {
   const [matches, setMatches] = useState<any[]>([]);
@@ -186,14 +187,14 @@ export const PublicFixturesPage: React.FC = () => {
                   <div className="space-y-2 py-2 border-y border-slate-800">
                     <div className="flex justify-between items-center text-base">
                       <span className={`font-bold ${m.winnerId === m.sideAId ? 'text-brand-400 font-black' : 'text-white'}`}>
-                        {m.sideAName}
+                        {formatBracketParticipant(m.sideAId, m.sideAName).displayName}
                       </span>
                       {m.winnerId === m.sideAId && <span className="text-xs font-bold text-brand-400">WINNER</span>}
                     </div>
 
                     <div className="flex justify-between items-center text-base">
                       <span className={`font-bold ${m.winnerId === m.sideBId ? 'text-brand-400 font-black' : 'text-white'}`}>
-                        {m.sideBName}
+                        {formatBracketParticipant(m.sideBId, m.sideBName).displayName}
                       </span>
                       {m.winnerId === m.sideBId && <span className="text-xs font-bold text-brand-400">WINNER</span>}
                     </div>

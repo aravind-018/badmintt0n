@@ -493,7 +493,7 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
         ? expectedQualified === 8
           ? 'Quarter Finals (8 teams) → Semi Finals → Grand Final'
           : expectedQualified === 6
-          ? 'Play-In Round (4 teams) + 2 BYEs → Semi Finals → Grand Final'
+          ? 'Quarter Finals (6 teams) → Semi Finals → Grand Final'
           : expectedQualified === 4
           ? 'Semi Finals (4 teams) → Grand Final'
           : 'Knockout Bracket'
