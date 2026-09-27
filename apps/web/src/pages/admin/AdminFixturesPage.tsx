@@ -23,6 +23,7 @@ import {
   Loader2,
   AlertTriangle,
   Info,
+  CheckCircle2,
 } from 'lucide-react';
 
 export const AdminFixturesPage: React.FC = () => {
@@ -57,6 +58,7 @@ export const AdminFixturesPage: React.FC = () => {
   const [generatorPreview, setGeneratorPreview] = useState<any | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [confirmGenerateChecked, setConfirmGenerateChecked] = useState(false);
 
   const [editingMatch, setEditingMatch] = useState<any | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
@@ -283,6 +285,7 @@ export const AdminFixturesPage: React.FC = () => {
     setIsGeneratorModalOpen(true);
     setIsPreviewLoading(true);
     setGeneratorPreview(null);
+    setConfirmGenerateChecked(false);
 
     try {
       const res = await fetch('/api/v1/matches/preview-fixtures', {
@@ -307,8 +310,13 @@ export const AdminFixturesPage: React.FC = () => {
     }
   };
 
-  const handleConfirmGenerateFixtures = async (confirmRegenerate = false) => {
+  const handleConfirmGenerateFixtures = async (confirmRegenerate = false, forceFormat?: string) => {
     if (isGenerating) return;
+
+    if ((forceFormat === 'GROUP_STAGE' || forceFormat === 'GROUP_KNOCKOUT') && generatorPreview?.totalTeams < 6) {
+      showToast('Group Stage requires at least 6 teams.', 'error');
+      return;
+    }
 
     setIsGenerating(true);
     try {
@@ -318,7 +326,12 @@ export const AdminFixturesPage: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ tournamentId, categoryId, confirmRegenerate }),
+        body: JSON.stringify({
+          tournamentId,
+          categoryId,
+          confirmRegenerate,
+          format: forceFormat || (generatorPreview?.totalTeams >= 6 ? 'GROUP_KNOCKOUT' : 'KNOCKOUT'),
+        }),
       });
 
       const data = await res.json();
@@ -783,7 +796,7 @@ export const AdminFixturesPage: React.FC = () => {
       {/* Fixture Generator & Preview Modal */}
       {isGeneratorModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card max-w-lg w-full p-6 rounded-2xl space-y-5 shadow-2xl border border-amber-500/30">
+          <div className="glass-card max-w-lg w-full p-6 rounded-2xl space-y-5 shadow-2xl border border-amber-500/30 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Zap className="w-5 h-5 text-accent-amber" /> Fixture Generator Preview
@@ -799,12 +812,42 @@ export const AdminFixturesPage: React.FC = () => {
               </div>
             ) : generatorPreview ? (
               <div className="space-y-4 text-xs">
+                {/* Eligibility / Status Banner */}
+                {generatorPreview.totalTeams >= 6 ? (
+                  <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-emerald-400 font-extrabold text-xs">Group Stage enabled</h4>
+                        <p className="text-slate-400 text-[11px]">Round Robin (max 3 teams/group) + Qualification Knockout</p>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px] tracking-wide uppercase border border-emerald-500/40">
+                      {generatorPreview.numberOfGroups} Groups
+                    </span>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-accent-amber flex items-center justify-center font-bold shrink-0 mt-0.5">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-accent-amber font-extrabold text-xs">Group Stage requires a minimum of 6 teams.</h4>
+                      <p className="text-slate-300 text-[11px] mt-0.5">
+                        Only {generatorPreview.totalTeams} {generatorPreview.totalTeams === 1 ? 'team is' : 'teams are'} registered. Standard single knockout format will be generated instead.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Format Summary Card */}
                 <div className="p-4 rounded-xl bg-dark-800 border border-slate-700 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400">Tournament Format:</span>
-                    <span className="font-extrabold text-brand-400 uppercase">
-                      {generatorPreview.tournamentFormat === 'GROUP_KNOCKOUT'
+                    <span className={`font-extrabold uppercase ${generatorPreview.totalTeams >= 6 ? 'text-brand-400' : 'text-accent-cyan'}`}>
+                      {generatorPreview.totalTeams >= 6
                         ? 'GROUP STAGE + KNOCKOUT'
                         : 'SINGLE KNOCKOUT BRACKET'}
                     </span>
@@ -813,32 +856,48 @@ export const AdminFixturesPage: React.FC = () => {
                     <span className="text-slate-400">Total Registered Teams:</span>
                     <span className="font-bold text-white">{generatorPreview.totalTeams} teams</span>
                   </div>
-                  {generatorPreview.numberOfGroups > 0 && (
+                  {generatorPreview.totalTeams >= 6 ? (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Number of Groups (max 3 per group):</span>
+                        <span className="font-bold text-accent-cyan">{generatorPreview.numberOfGroups} Groups</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Total Group Fixtures:</span>
+                        <span className="font-bold text-amber-400">{generatorPreview.totalGroupMatches} matches</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">Qualification Setting:</span>
+                        <span className="font-bold text-emerald-400">{generatorPreview.qualificationRule}</span>
+                      </div>
+                    </>
+                  ) : (
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Number of Groups (max 3 per group):</span>
-                      <span className="font-bold text-accent-cyan">{generatorPreview.numberOfGroups} Groups</span>
+                      <span className="text-slate-400">Format Option:</span>
+                      <span className="font-semibold text-slate-300">Normal Tournament Knockout Format</span>
                     </div>
                   )}
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Total Group Fixtures:</span>
-                    <span className="font-bold text-amber-400">{generatorPreview.totalGroupMatches} matches</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Qualification Setting:</span>
-                    <span className="font-bold text-emerald-400">{generatorPreview.qualificationRule}</span>
+                    <span className="text-slate-400">Knockout Structure:</span>
+                    <span className="font-bold text-white">{generatorPreview.knockoutStructure}</span>
                   </div>
                 </div>
 
-                {/* Groups Breakdown */}
-                {generatorPreview.groups?.length > 0 && (
+                {/* Groups Breakdown (when totalTeams >= 6) */}
+                {generatorPreview.totalTeams >= 6 && generatorPreview.groups?.length > 0 && (
                   <div className="space-y-2">
-                    <h4 className="font-bold text-slate-300 text-xs uppercase tracking-wider">Group Distribution:</h4>
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-slate-300 text-xs uppercase tracking-wider">Group Distribution:</h4>
+                      <span className="text-[10px] text-slate-400">Single Round Robin (max 3/group)</span>
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       {generatorPreview.groups.map((g: any) => (
                         <div key={g.id} className="p-3 rounded-xl bg-dark-900 border border-slate-800 text-[11px]">
-                          <div className="font-bold text-white flex justify-between">
+                          <div className="font-bold text-white flex justify-between items-center">
                             <span>{g.name}</span>
-                            <span className="text-brand-400">{g.teamCount} teams</span>
+                            <span className="px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-400 text-[10px] font-bold">
+                              {g.teamCount} teams · {g.matchesCount} match{g.matchesCount === 1 ? '' : 'es'}
+                            </span>
                           </div>
                           <p className="text-slate-400 mt-1 truncate">{g.teamNames.join(', ')}</p>
                         </div>
@@ -853,10 +912,27 @@ export const AdminFixturesPage: React.FC = () => {
                     <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                     <div>
                       <strong>Fixtures already exist for this tournament/category ({generatorPreview.existingMatchesCount} matches).</strong>
-                      <p className="mt-0.5 text-[11px] text-amber-200/80">Regenerating will rebuild the schedule and group stage.</p>
+                      <p className="mt-0.5 text-[11px] text-amber-200/80">Regenerating will rebuild the schedule and reset group standings.</p>
                     </div>
                   </div>
                 )}
+
+                {/* Required Confirmation Checkbox */}
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-dark-800/90 border border-slate-700/80 cursor-pointer select-none hover:border-slate-600 transition">
+                  <input
+                    type="checkbox"
+                    checked={confirmGenerateChecked}
+                    onChange={(e) => setConfirmGenerateChecked(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-700 text-brand-500 focus:ring-brand-500 cursor-pointer"
+                  />
+                  <span className="text-slate-300 text-xs leading-relaxed">
+                    I confirm that I want to generate{' '}
+                    <strong className="text-white">
+                      {generatorPreview.totalTeams >= 6 ? 'Group Stage + Knockout' : 'Normal Single Knockout'}
+                    </strong>{' '}
+                    fixtures for {generatorPreview.totalTeams} registered teams.
+                  </span>
+                </label>
 
                 <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-800">
                   <button
@@ -870,11 +946,17 @@ export const AdminFixturesPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleConfirmGenerateFixtures(generatorPreview.fixturesExist)}
-                    disabled={isGenerating}
-                    className="px-4 py-2.5 rounded-xl bg-accent-amber hover:bg-amber-600 text-dark-900 font-extrabold text-xs flex items-center gap-2 shadow-lg glow-cyan disabled:opacity-50"
+                    disabled={isGenerating || !confirmGenerateChecked}
+                    className="px-4 py-2.5 rounded-xl bg-accent-amber hover:bg-amber-600 text-dark-900 font-extrabold text-xs flex items-center gap-2 shadow-lg glow-cyan disabled:opacity-40 disabled:cursor-not-allowed transition"
                   >
                     {isGenerating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                    {generatorPreview.fixturesExist ? 'Regenerate Fixtures' : 'Generate Fixtures'}
+                    {generatorPreview.fixturesExist
+                      ? generatorPreview.totalTeams >= 6
+                        ? 'Regenerate Group Stage & Knockout'
+                        : 'Regenerate Knockout Fixtures'
+                      : generatorPreview.totalTeams >= 6
+                      ? 'Generate Group Stage & Knockout'
+                      : 'Generate Knockout Fixtures'}
                   </button>
                 </div>
               </div>

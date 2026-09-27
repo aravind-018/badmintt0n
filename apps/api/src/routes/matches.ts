@@ -460,8 +460,9 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
     where: { tournamentId, categoryId },
   });
 
-  const format = totalTeams > 8 ? 'GROUP_KNOCKOUT' : 'KNOCKOUT';
-  const groups = totalTeams > 8 ? distributeTeamsIntoGroups(participants) : [];
+  const isGroupStageEligible = totalTeams >= 6;
+  const format = isGroupStageEligible ? 'GROUP_KNOCKOUT' : 'KNOCKOUT';
+  const groups = isGroupStageEligible ? distributeTeamsIntoGroups(participants) : [];
 
   let totalGroupMatches = 0;
   groups.forEach((g) => {
@@ -474,6 +475,8 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
   res.json({
     preview: {
       tournamentFormat: format,
+      isGroupStageEligible,
+      groupStageRequirementMessage: !isGroupStageEligible ? 'Group Stage requires a minimum of 6 teams.' : null,
       totalTeams,
       numberOfGroups: groups.length,
       groups: groups.map((g) => ({
@@ -484,14 +487,21 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
         matchesCount: (g.teams.length * (g.teams.length - 1)) / 2,
       })),
       totalGroupMatches,
-      qualificationRule: `Top ${topN} from each group`,
-      expectedQualified,
-      knockoutStructure:
-        expectedQualified === 8
+      qualificationRule: isGroupStageEligible ? `Top ${topN} from each group` : 'N/A (Knockout)',
+      expectedQualified: isGroupStageEligible ? expectedQualified : totalTeams,
+      knockoutStructure: isGroupStageEligible
+        ? expectedQualified === 8
           ? 'Quarter Finals (8 teams) → Semi Finals → Grand Final'
           : expectedQualified === 6
           ? 'Play-In Round (4 teams) + 2 BYEs → Semi Finals → Grand Final'
-          : 'Knockout Bracket',
+          : expectedQualified === 4
+          ? 'Semi Finals (4 teams) → Grand Final'
+          : 'Knockout Bracket'
+        : totalTeams >= 4
+        ? 'Semi Finals → Grand Final'
+        : totalTeams >= 2
+        ? 'Grand Final'
+        : 'Knockout Bracket',
       fixturesExist: existingMatchesCount > 0,
       existingMatchesCount,
     },
@@ -500,7 +510,7 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
 
 // POST /api/v1/matches/generate-fixtures — Generate fixtures end-to-end (Group Stage + Knockout)
 matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
-  const { tournamentId, categoryId, confirmRegenerate } = req.body;
+  const { tournamentId, categoryId, confirmRegenerate, format: requestedFormat } = req.body;
 
   if (!tournamentId || !categoryId) {
     res.status(400).json({ error: 'Tournament ID and Category ID are required' });
@@ -530,6 +540,23 @@ matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADM
 
   const totalTeams = participants.length;
 
+  // Validation: If user attempts to force group stage with < 6 teams, reject with clear error message
+  if ((requestedFormat === 'GROUP_STAGE' || requestedFormat === 'GROUP_KNOCKOUT') && totalTeams < 6) {
+    res.status(400).json({ error: 'Group Stage requires at least 6 teams.' });
+    return;
+  }
+
+  const isGroupStage = requestedFormat
+    ? (requestedFormat === 'GROUP_STAGE' || requestedFormat === 'GROUP_KNOCKOUT')
+    : (totalTeams >= 6);
+
+  if (isGroupStage && totalTeams < 6) {
+    res.status(400).json({ error: 'Group Stage requires at least 6 teams.' });
+    return;
+  }
+
+  const category = await prisma.category.findUnique({ where: { id: categoryId } });
+
   try {
     const createdMatches = await prisma.$transaction(async (tx) => {
       // Clean up existing matches and standings for this category
@@ -545,8 +572,8 @@ matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADM
 
       const matchesToCreate: any[] = [];
 
-      if (totalTeams > 8) {
-        // AUTOMATIC GROUP STAGE (> 8 teams, max 3 per group)
+      if (isGroupStage) {
+        // AUTOMATIC GROUP STAGE (>= 6 teams, max 3 per group)
         const groups = distributeTeamsIntoGroups(participants);
 
         // Create initial Standing records for every participant in their group
@@ -593,7 +620,7 @@ matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADM
 
         // Create draft Knockout Bracket structure
         const dummyQualified: Participant[] = [];
-        const topN = 2;
+        const topN = category?.qualificationRule === 'TOP_1' ? 1 : 2;
         groups.forEach((g) => {
           for (let k = 0; k < topN; k++) {
             dummyQualified.push({
@@ -608,22 +635,24 @@ matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADM
 
         return [...createdGroupMatches, ...createdKnockoutMatches];
       } else {
-        // <= 8 TEAMS: Standard Single Knockout Bracket
+        // < 6 TEAMS: Standard Single Knockout Bracket
         const createdKnockoutMatches = await createKnockoutMatchesInTx(tx, tournamentId, categoryId, participants);
         return createdKnockoutMatches;
       }
     });
 
+    const finalFormat = isGroupStage ? 'GROUP_KNOCKOUT' : 'KNOCKOUT';
+
     await logAudit({
       userId: req.user?.id,
       action: 'FIXTURE_CHANGED',
       entity: 'Match',
-      metadata: { tournamentId, categoryId, totalTeams, format: totalTeams > 8 ? 'GROUP_KNOCKOUT' : 'KNOCKOUT' },
+      metadata: { tournamentId, categoryId, totalTeams, format: finalFormat },
     });
 
     res.status(201).json({
       message: `Fixtures generated successfully for ${totalTeams} teams.`,
-      format: totalTeams > 8 ? 'GROUP_KNOCKOUT' : 'KNOCKOUT',
+      format: finalFormat,
       count: createdMatches.length,
     });
   } catch (err: any) {
