@@ -81,6 +81,110 @@ matchRouter.get('/', async (req, res) => {
   res.json({ matches });
 });
 
+// GET /api/v1/matches/group-standings — Fetch separate group standings for a category/tournament
+matchRouter.get('/group-standings', async (req, res) => {
+  const { tournamentId, categoryId } = req.query;
+
+  if (!tournamentId) {
+    res.status(400).json({ error: 'Tournament ID is required' });
+    return;
+  }
+
+  try {
+    const tId = String(tournamentId);
+    const cId = categoryId ? String(categoryId) : undefined;
+
+    let progress = null;
+    if (cId) {
+      try {
+        progress = await updateGroupStandingsAndQualification(tId, cId);
+      } catch (err) {
+        console.warn('[Group Standings Warning] Failed to update standings on-the-fly:', err);
+      }
+    }
+
+    const where: any = { tournamentId: tId };
+    if (cId) where.categoryId = cId;
+
+    const standings = await prisma.standing.findMany({
+      where,
+      include: {
+        team: { select: { id: true, name: true, logoUrl: true, organization: true } },
+      },
+      orderBy: [{ groupOrder: 'asc' }, { position: 'asc' }],
+    });
+
+    // Group standings by groupName
+    const groupsMap: Record<string, any[]> = {};
+    for (const s of standings) {
+      const gName = s.groupName || 'Overall Standings';
+      if (!groupsMap[gName]) groupsMap[gName] = [];
+      groupsMap[gName].push(s);
+    }
+
+    res.json({
+      groups: groupsMap,
+      progress,
+      standings,
+    });
+  } catch (err: any) {
+    console.error('[Group Standings Error]', err);
+    res.status(500).json({ error: 'Failed to compute group standings', details: err.message });
+  }
+});
+
+// GET /api/v1/matches/group-fixtures — Fetch group stage fixtures for a tournament/category
+matchRouter.get('/group-fixtures', async (req, res) => {
+  const { tournamentId, categoryId } = req.query;
+
+  if (!tournamentId) {
+    res.status(400).json({ error: 'Tournament ID is required' });
+    return;
+  }
+
+  try {
+    const tId = String(tournamentId);
+    const cId = categoryId ? String(categoryId) : undefined;
+
+    const where: any = { tournamentId: tId };
+    if (cId) where.categoryId = cId;
+    where.OR = [
+      { stage: 'GROUP' },
+      { groupId: { not: null } },
+      { round: { startsWith: 'Group' } },
+    ];
+
+    const matches = await prisma.match.findMany({
+      where,
+      include: {
+        category: { select: { id: true, type: true } },
+        court: { select: { id: true, name: true, location: true } },
+        tournament: { select: { id: true, name: true, slug: true } },
+        games: true,
+      },
+      orderBy: [{ groupOrder: 'asc' }, { roundNumber: 'asc' }, { matchNumber: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    // Group matches by groupName
+    const groupsMap: Record<string, any[]> = {};
+    for (const m of matches) {
+      const gName = m.groupName || (m.round && m.round.includes('Group') ? m.round.split('-')[0].trim() : 'Group Stage');
+      if (!groupsMap[gName]) groupsMap[gName] = [];
+      groupsMap[gName].push(m);
+    }
+
+    res.json({
+      tournamentId: tId,
+      categoryId: cId || null,
+      groups: groupsMap,
+      fixtures: matches,
+    });
+  } catch (err: any) {
+    console.error('[Group Fixtures Error]', err);
+    res.status(500).json({ error: 'Failed to fetch group fixtures', details: err.message });
+  }
+});
+
 // GET /api/v1/matches/:id — Get match details
 matchRouter.get('/:id', async (req, res) => {
   const { id } = req.params;
@@ -336,43 +440,6 @@ async function getCategoryParticipants(tournamentId: string, categoryId: string)
   return fetchedPlayers.map((p) => ({ id: p.id, name: p.name, type: 'PLAYER' }));
 }
 
-// GET /api/v1/matches/group-standings — Fetch separate group standings for a category
-matchRouter.get('/group-standings', async (req, res) => {
-  const { tournamentId, categoryId } = req.query;
-
-  if (!tournamentId || !categoryId) {
-    res.status(400).json({ error: 'Tournament ID and Category ID are required' });
-    return;
-  }
-
-  try {
-    const progress = await updateGroupStandingsAndQualification(String(tournamentId), String(categoryId));
-
-    const standings = await prisma.standing.findMany({
-      where: { tournamentId: String(tournamentId), categoryId: String(categoryId) },
-      include: {
-        team: { select: { id: true, name: true, logoUrl: true, organization: true } },
-      },
-      orderBy: [{ groupOrder: 'asc' }, { position: 'asc' }],
-    });
-
-    // Group standings by groupName
-    const groupsMap: Record<string, any[]> = {};
-    for (const s of standings) {
-      const gName = s.groupName || 'Overall Standings';
-      if (!groupsMap[gName]) groupsMap[gName] = [];
-      groupsMap[gName].push(s);
-    }
-
-    res.json({
-      groups: groupsMap,
-      progress,
-    });
-  } catch (err: any) {
-    console.error('[Group Standings Error]', err);
-    res.status(500).json({ error: 'Failed to compute group standings', details: err.message });
-  }
-});
 
 // POST /api/v1/matches/preview-fixtures — Preview fixture generation details before confirming
 matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
