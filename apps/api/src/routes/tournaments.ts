@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { prisma } from '@badminton-live/database';
-import { tournamentSchema } from '../schemas/tournament';
+import { tournamentSchema, tournamentUpdateSchema } from '../schemas/tournament';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
 
 export const tournamentRouter = Router();
@@ -114,9 +114,9 @@ tournamentRouter.post('/', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNA
 // PUT /api/v1/tournaments/:id — Update tournament (Protected: SUPER_ADMIN, TOURNAMENT_ADMIN)
 tournamentRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const result = tournamentSchema.partial().safeParse(req.body);
+  const result = tournamentUpdateSchema.safeParse(req.body);
   if (!result.success) {
-    res.status(400).json({ error: 'Validation error', details: result.error.errors.map(e => e.message) });
+    res.status(400).json({ error: 'Validation error', details: result.error.errors.map((e: any) => e.message) });
     return;
   }
 

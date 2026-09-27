@@ -160,6 +160,8 @@ model Category {
   type         CategoryType
   createdAt    DateTime     @default(now())
 
+  qualificationRule String?      @default("TOP_2")
+
   matches   Match[]
   standings Standing[]
 
@@ -261,6 +263,14 @@ model Match {
   sideBGamesWon    Int         @default(0)
   nextMatchId      String?
   nextMatchSlot    String?     /// 'A' | 'B'
+  stage            String?     /// 'GROUP_STAGE' | 'KNOCKOUT' | 'PLAY_IN'
+  groupId          String?
+  groupName        String?     /// 'Group A', 'Group B', etc.
+  groupOrder       Int?
+  roundNumber      Int?
+  matchNumber      Int?
+  bracketPosition  Int?
+  seed             Int?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 
@@ -270,6 +280,7 @@ model Match {
   @@index([tournamentId, status])
   @@index([courtId, status])
   @@index([scorerId])
+  @@index([tournamentId, categoryId, stage])
 }
 
 model MatchGame {
@@ -303,27 +314,34 @@ model MatchEvent {
 }
 
 model Standing {
-  id               String     @id @default(cuid())
-  tournamentId     String
-  tournament       Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  categoryId       String
-  category         Category   @relation(fields: [categoryId], references: [id])
-  teamId           String?
-  team             Team?      @relation(fields: [teamId], references: [id])
-  playerId         String?
-  position         Int
-  played           Int        @default(0)
-  won              Int        @default(0)
-  lost             Int        @default(0)
-  gamesWon         Int        @default(0)
-  gamesLost        Int        @default(0)
-  pointsScored     Int        @default(0)
-  pointsConceded   Int        @default(0)
-  tournamentPoints Int        @default(0)
-  tiebreakData     Json?
-  updatedAt        DateTime   @updatedAt
+  id                   String     @id @default(cuid())
+  tournamentId         String
+  tournament           Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  categoryId           String
+  category             Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  teamId               String?
+  team                 Team?      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  playerId             String?
+  groupId              String?
+  groupName            String?    /// 'Group A', 'Group B', etc.
+  groupOrder           Int?
+  qualified            Boolean    @default(false)
+  qualificationStatus  String?    /// 'QUALIFIED' | 'ELIMINATED' | 'PENDING'
+  qualificationPosition Int?
+  position             Int
+  played               Int        @default(0)
+  won                  Int        @default(0)
+  lost                 Int        @default(0)
+  gamesWon             Int        @default(0)
+  gamesLost            Int        @default(0)
+  pointsScored         Int        @default(0)
+  pointsConceded       Int        @default(0)
+  tournamentPoints     Int        @default(0)
+  tiebreakData         Json?
+  updatedAt            DateTime   @updatedAt
 
   @@index([tournamentId, categoryId, position])
+  @@index([tournamentId, categoryId, groupId])
 }
 
 model Announcement {

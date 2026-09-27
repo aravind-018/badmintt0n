@@ -274,263 +274,28 @@ matchRouter.delete('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNA
   res.json({ message: 'Match deleted successfully', id });
 });
 
-// POST /api/v1/matches/generate-knockout — Automatic Knockout Bracket Generator
-matchRouter.post('/generate-knockout', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
-  const { tournamentId, categoryId, participantIds, participantNames, courtIds } = req.body;
+import {
+  distributeTeamsIntoGroups,
+  generateGroupRoundRobinMatches,
+  generateKnockoutMatchesStructure,
+  updateGroupStandingsAndQualification,
+  Participant,
+} from '../utils/fixtureGenerator';
+import { logAudit } from '../utils/audit';
 
-  if (!tournamentId || !categoryId) {
-    res.status(400).json({ error: 'Tournament ID and Category ID are required' });
-    return;
-  }
-
-  // Retrieve category to check if event is Doubles
+// Helper: Get participants (Teams or Player Pairs) for a category in a tournament
+async function getCategoryParticipants(tournamentId: string, categoryId: string): Promise<Participant[]> {
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
   const isDoubles = category?.type === 'MENS_DOUBLES' || category?.type === 'WOMENS_DOUBLES' || category?.type === 'MIXED_DOUBLES';
-
-  // Get participants (from explicit payload, tournament teams, or players)
-  let players: { id: string; name: string; type: string }[] = [];
-  if (participantIds && Array.isArray(participantIds) && participantIds.length > 0) {
-    players = participantIds.map((id: string, index: number) => ({
-      id,
-      name: participantNames?.[index] || `Participant ${index + 1}`,
-      type: 'PLAYER',
-    }));
-  } else {
-    // 1. Check if teams exist for this tournament
-    const teams = await prisma.team.findMany({
-      where: { tournamentId },
-      include: { teamPlayers: { include: { player: true } } },
-    });
-
-    if (teams.length >= 2) {
-      players = teams.map((team) => {
-        let name = team.name;
-        if (isDoubles) {
-          if (team.teamPlayers.length >= 2) {
-            const playerPair = team.teamPlayers.map((tp) => tp.player.name).slice(0, 2).join(' / ');
-            name = `${playerPair} (${team.name})`;
-          } else if (team.teamPlayers.length === 1) {
-            name = `${team.teamPlayers[0].player.name} (${team.name})`;
-          }
-        }
-        return {
-          id: team.id,
-          name,
-          type: 'TEAM',
-        };
-      });
-    } else {
-      // 2. Fetch individual players and group into doubles pairs if category is Doubles
-      const fetchedPlayers = await prisma.player.findMany({ orderBy: { seed: 'asc' } });
-      if (isDoubles) {
-        const doublesPairs: { id: string; name: string; type: string }[] = [];
-        for (let i = 0; i < fetchedPlayers.length; i += 2) {
-          if (i + 1 < fetchedPlayers.length) {
-            const p1 = fetchedPlayers[i];
-            const p2 = fetchedPlayers[i + 1];
-            doublesPairs.push({
-              id: `${p1.id}_${p2.id}`,
-              name: `${p1.name} / ${p2.name}`,
-              type: 'PLAYER',
-            });
-          } else {
-            const p = fetchedPlayers[i];
-            doublesPairs.push({
-              id: p.id,
-              name: p.name,
-              type: 'PLAYER',
-            });
-          }
-        }
-        players = doublesPairs;
-      } else {
-        players = fetchedPlayers.map((p) => ({
-          id: p.id,
-          name: p.name,
-          type: 'PLAYER',
-        }));
-      }
-    }
-  }
-
-  // Determine rounds: Quarter Final (4 matches), Semi Final (2 matches), Final (1 match)
-  const count = players.length;
-  let roundsToGenerate = ['Quarter Final', 'Semi Final', 'Final'];
-  if (count <= 4) roundsToGenerate = ['Semi Final', 'Final'];
-
-  // Delete existing matches for this category in tournament
-  await prisma.match.deleteMany({ where: { tournamentId, categoryId } });
-
-  const createdMatches: any[] = [];
-
-  // 1. Create Final
-  const finalMatch = await prisma.match.create({
-    data: {
-      tournamentId,
-      categoryId,
-      round: 'Final',
-      scheduledAt: new Date(Date.now() + 86400000 * 2), // 2 days later
-      sideAType: 'PLAYER',
-      sideAId: 'TBD',
-      sideAName: 'Winner Semi Final 1',
-      sideBType: 'PLAYER',
-      sideBId: 'TBD',
-      sideBName: 'Winner Semi Final 2',
-      status: 'SCHEDULED',
-      courtId: courtIds?.[0] || null,
-    },
-  });
-  createdMatches.push(finalMatch);
-
-  // 2. Create Semi Finals (SF1 and SF2, linking to Final)
-  const sf1 = await prisma.match.create({
-    data: {
-      tournamentId,
-      categoryId,
-      round: 'Semi Final',
-      scheduledAt: new Date(Date.now() + 86400000), // 1 day later
-      sideAType: players[0]?.type || 'PLAYER',
-      sideAId: players[0]?.id || 'TBD',
-      sideAName: players[0]?.name || 'Winner QF 1',
-      sideBType: players[3]?.type || 'PLAYER',
-      sideBId: players[3]?.id || 'TBD',
-      sideBName: players[3]?.name || 'Winner QF 2',
-      status: 'SCHEDULED',
-      nextMatchId: finalMatch.id,
-      nextMatchSlot: 'A',
-      courtId: courtIds?.[0] || null,
-    },
-  });
-
-  const sf2 = await prisma.match.create({
-    data: {
-      tournamentId,
-      categoryId,
-      round: 'Semi Final',
-      scheduledAt: new Date(Date.now() + 86400000), // 1 day later
-      sideAType: players[1]?.type || 'PLAYER',
-      sideAId: players[1]?.id || 'TBD',
-      sideAName: players[1]?.name || 'Winner QF 3',
-      sideBType: players[2]?.type || 'PLAYER',
-      sideBId: players[2]?.id || 'TBD',
-      sideBName: players[2]?.name || 'Winner QF 4',
-      status: 'SCHEDULED',
-      nextMatchId: finalMatch.id,
-      nextMatchSlot: 'B',
-      courtId: courtIds?.[1] || courtIds?.[0] || null,
-    },
-  });
-
-  createdMatches.push(sf1, sf2);
-
-  // If 8 participants, create Quarter Finals
-  if (count >= 8) {
-    const qf1 = await prisma.match.create({
-      data: {
-        tournamentId,
-        categoryId,
-        round: 'Quarter Final',
-        scheduledAt: new Date(),
-        sideAType: players[0]?.type || 'PLAYER',
-        sideAId: players[0]?.id || 'p1',
-        sideAName: players[0]?.name || 'Player 1',
-        sideBType: players[7]?.type || 'PLAYER',
-        sideBId: players[7]?.id || 'p8',
-        sideBName: players[7]?.name || 'Player 8',
-        status: 'SCHEDULED',
-        nextMatchId: sf1.id,
-        nextMatchSlot: 'A',
-        courtId: courtIds?.[0] || null,
-      },
-    });
-
-    const qf2 = await prisma.match.create({
-      data: {
-        tournamentId,
-        categoryId,
-        round: 'Quarter Final',
-        scheduledAt: new Date(),
-        sideAType: players[3]?.type || 'PLAYER',
-        sideAId: players[3]?.id || 'p4',
-        sideAName: players[3]?.name || 'Player 4',
-        sideBType: players[4]?.type || 'PLAYER',
-        sideBId: players[4]?.id || 'p5',
-        sideBName: players[4]?.name || 'Player 5',
-        status: 'SCHEDULED',
-        nextMatchId: sf1.id,
-        nextMatchSlot: 'B',
-        courtId: courtIds?.[1] || courtIds?.[0] || null,
-      },
-    });
-
-    const qf3 = await prisma.match.create({
-      data: {
-        tournamentId,
-        categoryId,
-        round: 'Quarter Final',
-        scheduledAt: new Date(),
-        sideAType: players[1]?.type || 'PLAYER',
-        sideAId: players[1]?.id || 'p2',
-        sideAName: players[1]?.name || 'Player 2',
-        sideBType: players[6]?.type || 'PLAYER',
-        sideBId: players[6]?.id || 'p7',
-        sideBName: players[6]?.name || 'Player 7',
-        status: 'SCHEDULED',
-        nextMatchId: sf2.id,
-        nextMatchSlot: 'A',
-        courtId: courtIds?.[2] || courtIds?.[0] || null,
-      },
-    });
-
-    const qf4 = await prisma.match.create({
-      data: {
-        tournamentId,
-        categoryId,
-        round: 'Quarter Final',
-        scheduledAt: new Date(),
-        sideAType: players[2]?.type || 'PLAYER',
-        sideAId: players[2]?.id || 'p3',
-        sideAName: players[2]?.name || 'Player 3',
-        sideBType: players[5]?.type || 'PLAYER',
-        sideBId: players[5]?.id || 'p6',
-        sideBName: players[5]?.name || 'Player 6',
-        status: 'SCHEDULED',
-        nextMatchId: sf2.id,
-        nextMatchSlot: 'B',
-        courtId: courtIds?.[3] || courtIds?.[0] || null,
-      },
-    });
-
-    createdMatches.push(qf1, qf2, qf3, qf4);
-  }
-
-  res.status(201).json({
-    message: `Generated Knockout bracket with ${createdMatches.length} matches`,
-    matches: createdMatches,
-  });
-});
-
-// POST /api/v1/matches/generate-round-robin — Automatic Round Robin Generator
-matchRouter.post('/generate-round-robin', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
-  const { tournamentId, categoryId } = req.body;
-
-  if (!tournamentId || !categoryId) {
-    res.status(400).json({ error: 'Tournament ID and Category ID are required' });
-    return;
-  }
-
-  const category = await prisma.category.findUnique({ where: { id: categoryId } });
-  const isDoubles = category?.type === 'MENS_DOUBLES' || category?.type === 'WOMENS_DOUBLES' || category?.type === 'MIXED_DOUBLES';
-
-  let players: { id: string; name: string; type: string }[] = [];
 
   const teams = await prisma.team.findMany({
     where: { tournamentId },
     include: { teamPlayers: { include: { player: true } } },
+    orderBy: { name: 'asc' },
   });
 
   if (teams.length >= 2) {
-    players = teams.map((team) => {
+    return teams.map((team) => {
       let name = team.name;
       if (isDoubles) {
         if (team.teamPlayers.length >= 2) {
@@ -542,62 +307,502 @@ matchRouter.post('/generate-round-robin', authenticateToken, requireRole('SUPER_
       }
       return { id: team.id, name, type: 'TEAM' };
     });
-  } else {
-    const fetchedPlayers = await prisma.player.findMany({ orderBy: { seed: 'asc' } });
-    if (isDoubles) {
-      const doublesPairs: { id: string; name: string; type: string }[] = [];
-      for (let i = 0; i < fetchedPlayers.length; i += 2) {
-        if (i + 1 < fetchedPlayers.length) {
-          doublesPairs.push({
-            id: `${fetchedPlayers[i].id}_${fetchedPlayers[i + 1].id}`,
-            name: `${fetchedPlayers[i].name} / ${fetchedPlayers[i + 1].name}`,
-            type: 'PLAYER',
-          });
-        } else {
-          doublesPairs.push({
-            id: fetchedPlayers[i].id,
-            name: fetchedPlayers[i].name,
-            type: 'PLAYER',
-          });
-        }
-      }
-      players = doublesPairs;
-    } else {
-      players = fetchedPlayers.map((p) => ({ id: p.id, name: p.name, type: 'PLAYER' }));
-    }
   }
 
-  if (players.length < 2) {
-    res.status(400).json({ error: 'At least 2 teams or player pairs are required for Round Robin' });
+  const fetchedPlayers = await prisma.player.findMany({ orderBy: [{ seed: 'asc' }, { name: 'asc' }] });
+  if (isDoubles) {
+    const pairs: Participant[] = [];
+    for (let i = 0; i < fetchedPlayers.length; i += 2) {
+      if (i + 1 < fetchedPlayers.length) {
+        const p1 = fetchedPlayers[i];
+        const p2 = fetchedPlayers[i + 1];
+        pairs.push({
+          id: `${p1.id}_${p2.id}`,
+          name: `${p1.name} / ${p2.name}`,
+          type: 'PLAYER',
+        });
+      } else {
+        const p = fetchedPlayers[i];
+        pairs.push({
+          id: p.id,
+          name: p.name,
+          type: 'PLAYER',
+        });
+      }
+    }
+    return pairs;
+  }
+
+  return fetchedPlayers.map((p) => ({ id: p.id, name: p.name, type: 'PLAYER' }));
+}
+
+// GET /api/v1/matches/group-standings — Fetch separate group standings for a category
+matchRouter.get('/group-standings', async (req, res) => {
+  const { tournamentId, categoryId } = req.query;
+
+  if (!tournamentId || !categoryId) {
+    res.status(400).json({ error: 'Tournament ID and Category ID are required' });
     return;
   }
 
-  // Round robin pair generation
-  const createdMatches = [];
-  for (let i = 0; i < players.length; i++) {
-    for (let j = i + 1; j < players.length; j++) {
-      const match = await prisma.match.create({
-        data: {
-          tournamentId,
-          categoryId,
-          round: `Round Robin`,
-          scheduledAt: new Date(Date.now() + (i + j) * 3600000),
-          sideAType: players[i].type || 'PLAYER',
-          sideAId: players[i].id,
-          sideAName: players[i].name,
-          sideBType: players[j].type || 'PLAYER',
-          sideBId: players[j].id,
-          sideBName: players[j].name,
-          status: 'SCHEDULED',
-        },
-      });
-      createdMatches.push(match);
+  try {
+    const progress = await updateGroupStandingsAndQualification(String(tournamentId), String(categoryId));
+
+    const standings = await prisma.standing.findMany({
+      where: { tournamentId: String(tournamentId), categoryId: String(categoryId) },
+      include: {
+        team: { select: { id: true, name: true, logoUrl: true, organization: true } },
+      },
+      orderBy: [{ groupOrder: 'asc' }, { position: 'asc' }],
+    });
+
+    // Group standings by groupName
+    const groupsMap: Record<string, any[]> = {};
+    for (const s of standings) {
+      const gName = s.groupName || 'Overall Standings';
+      if (!groupsMap[gName]) groupsMap[gName] = [];
+      groupsMap[gName].push(s);
     }
+
+    res.json({
+      groups: groupsMap,
+      progress,
+    });
+  } catch (err: any) {
+    console.error('[Group Standings Error]', err);
+    res.status(500).json({ error: 'Failed to compute group standings', details: err.message });
+  }
+});
+
+// POST /api/v1/matches/preview-fixtures — Preview fixture generation details before confirming
+matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
+  const { tournamentId, categoryId } = req.body;
+
+  if (!tournamentId || !categoryId) {
+    res.status(400).json({ error: 'Tournament ID and Category ID are required' });
+    return;
   }
 
-  res.status(201).json({
-    message: `Generated ${createdMatches.length} Round Robin matches`,
-    matches: createdMatches,
+  const category = await prisma.category.findUnique({ where: { id: categoryId } });
+  const participants = await getCategoryParticipants(tournamentId, categoryId);
+  const totalTeams = participants.length;
+
+  const existingMatchesCount = await prisma.match.count({
+    where: { tournamentId, categoryId },
+  });
+
+  const format = totalTeams > 8 ? 'GROUP_KNOCKOUT' : 'KNOCKOUT';
+  const groups = totalTeams > 8 ? distributeTeamsIntoGroups(participants) : [];
+
+  let totalGroupMatches = 0;
+  groups.forEach((g) => {
+    totalGroupMatches += (g.teams.length * (g.teams.length - 1)) / 2;
+  });
+
+  const topN = category?.qualificationRule === 'TOP_1' ? 1 : 2;
+  const expectedQualified = groups.length * topN;
+
+  res.json({
+    preview: {
+      tournamentFormat: format,
+      totalTeams,
+      numberOfGroups: groups.length,
+      groups: groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        teamCount: g.teams.length,
+        teamNames: g.teams.map((t) => t.name),
+        matchesCount: (g.teams.length * (g.teams.length - 1)) / 2,
+      })),
+      totalGroupMatches,
+      qualificationRule: `Top ${topN} from each group`,
+      expectedQualified,
+      knockoutStructure:
+        expectedQualified === 8
+          ? 'Quarter Finals (8 teams) → Semi Finals → Grand Final'
+          : expectedQualified === 6
+          ? 'Play-In Round (4 teams) + 2 BYEs → Semi Finals → Grand Final'
+          : 'Knockout Bracket',
+      fixturesExist: existingMatchesCount > 0,
+      existingMatchesCount,
+    },
   });
 });
+
+// POST /api/v1/matches/generate-fixtures — Generate fixtures end-to-end (Group Stage + Knockout)
+matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
+  const { tournamentId, categoryId, confirmRegenerate } = req.body;
+
+  if (!tournamentId || !categoryId) {
+    res.status(400).json({ error: 'Tournament ID and Category ID are required' });
+    return;
+  }
+
+  const existingMatches = await prisma.match.findMany({
+    where: { tournamentId, categoryId },
+    select: { id: true, status: true },
+  });
+
+  if (existingMatches.length > 0 && !confirmRegenerate) {
+    res.status(400).json({
+      error: 'Fixtures already exist for this tournament/category.',
+      fixturesExist: true,
+      existingCount: existingMatches.length,
+    });
+    return;
+  }
+
+  const participants = await getCategoryParticipants(tournamentId, categoryId);
+
+  if (participants.length < 2) {
+    res.status(400).json({ error: 'At least 2 teams or players are required to generate fixtures.' });
+    return;
+  }
+
+  const totalTeams = participants.length;
+
+  try {
+    const createdMatches = await prisma.$transaction(async (tx) => {
+      // Clean up existing matches and standings for this category
+      const oldMatchIds = existingMatches.map((m) => m.id);
+      if (oldMatchIds.length > 0) {
+        await tx.matchEvent.deleteMany({ where: { matchId: { in: oldMatchIds } } });
+        await tx.matchGame.deleteMany({ where: { matchId: { in: oldMatchIds } } });
+        await tx.match.updateMany({ where: { id: { in: oldMatchIds } }, data: { nextMatchId: null } });
+        await tx.match.deleteMany({ where: { id: { in: oldMatchIds } } });
+      }
+
+      await tx.standing.deleteMany({ where: { tournamentId, categoryId } });
+
+      const matchesToCreate: any[] = [];
+
+      if (totalTeams > 8) {
+        // AUTOMATIC GROUP STAGE (> 8 teams, max 4 per group)
+        const groups = distributeTeamsIntoGroups(participants);
+
+        // Create initial Standing records for every participant in their group
+        for (const g of groups) {
+          for (let pos = 0; pos < g.teams.length; pos++) {
+            const team = g.teams[pos];
+            await tx.standing.create({
+              data: {
+                tournamentId,
+                categoryId,
+                teamId: team.type === 'TEAM' ? team.id : null,
+                playerId: team.type === 'PLAYER' ? team.id : null,
+                groupId: g.id,
+                groupName: g.name,
+                groupOrder: g.order,
+                position: pos + 1,
+                played: 0,
+                won: 0,
+                lost: 0,
+                gamesWon: 0,
+                gamesLost: 0,
+                pointsScored: 0,
+                pointsConceded: 0,
+                tournamentPoints: 0,
+                qualified: false,
+                qualificationStatus: 'PENDING',
+              },
+            });
+          }
+        }
+
+        // Generate group stage round-robin matches
+        for (const g of groups) {
+          const groupMatches = generateGroupRoundRobinMatches(tournamentId, categoryId, g);
+          matchesToCreate.push(...groupMatches);
+        }
+
+        // Insert group stage matches
+        const createdGroupMatches = [];
+        for (const mData of matchesToCreate) {
+          const m = await tx.match.create({ data: mData });
+          createdGroupMatches.push(m);
+        }
+
+        // Create draft Knockout Bracket structure
+        const dummyQualified: Participant[] = [];
+        const topN = 2;
+        groups.forEach((g) => {
+          for (let k = 0; k < topN; k++) {
+            dummyQualified.push({
+              id: 'TBD',
+              name: `Qualified ${g.name} #${k + 1}`,
+              type: 'PLAYER',
+            });
+          }
+        });
+
+        const knockoutStructure = generateKnockoutMatchesStructure(tournamentId, categoryId, dummyQualified);
+        if (knockoutStructure) {
+          // 1. Create Final
+          const finalMatch = await tx.match.create({
+            data: {
+              tournamentId,
+              categoryId,
+              stage: 'KNOCKOUT',
+              round: 'Grand Final',
+              roundNumber: 3,
+              matchNumber: 1,
+              bracketPosition: 1,
+              sideAType: 'PLAYER',
+              sideAId: 'TBD',
+              sideAName: 'Winner Semi Final 1',
+              sideBType: 'PLAYER',
+              sideBId: 'TBD',
+              sideBName: 'Winner Semi Final 2',
+              status: 'SCHEDULED',
+            },
+          });
+
+          // 2. Create Semi Finals
+          const sf1 = await tx.match.create({
+            data: {
+              tournamentId,
+              categoryId,
+              stage: 'KNOCKOUT',
+              round: 'Semi Finals',
+              roundNumber: 2,
+              matchNumber: 1,
+              bracketPosition: 1,
+              sideAType: 'PLAYER',
+              sideAId: 'TBD',
+              sideAName: 'Winner Quarter Final 1',
+              sideBType: 'PLAYER',
+              sideBId: 'TBD',
+              sideBName: 'Winner Quarter Final 2',
+              status: 'SCHEDULED',
+              nextMatchId: finalMatch.id,
+              nextMatchSlot: 'A',
+            },
+          });
+
+          const sf2 = await tx.match.create({
+            data: {
+              tournamentId,
+              categoryId,
+              stage: 'KNOCKOUT',
+              round: 'Semi Finals',
+              roundNumber: 2,
+              matchNumber: 2,
+              bracketPosition: 2,
+              sideAType: 'PLAYER',
+              sideAId: 'TBD',
+              sideAName: 'Winner Quarter Final 3',
+              sideBType: 'PLAYER',
+              sideBId: 'TBD',
+              sideBName: 'Winner Quarter Final 4',
+              status: 'SCHEDULED',
+              nextMatchId: finalMatch.id,
+              nextMatchSlot: 'B',
+            },
+          });
+
+          // 3. Create Quarter Finals / Play-Ins
+          if (knockoutStructure && 'quarterFinals' in knockoutStructure && (knockoutStructure as any).quarterFinals) {
+            const qfs = (knockoutStructure as any).quarterFinals;
+            const qfSlots = [
+              { match: qfs[0], nextMatchId: sf1.id, nextMatchSlot: 'A' },
+              { match: qfs[1], nextMatchId: sf1.id, nextMatchSlot: 'B' },
+              { match: qfs[2], nextMatchId: sf2.id, nextMatchSlot: 'A' },
+              { match: qfs[3], nextMatchId: sf2.id, nextMatchSlot: 'B' },
+            ];
+
+            for (const qfSlot of qfSlots) {
+              if (qfSlot.match) {
+                await tx.match.create({
+                  data: {
+                    ...qfSlot.match,
+                    nextMatchId: qfSlot.nextMatchId,
+                    nextMatchSlot: qfSlot.nextMatchSlot,
+                  },
+                });
+              }
+            }
+          }
+        }
+
+        return createdGroupMatches;
+      } else {
+        // <= 8 TEAMS: Standard Single Knockout Bracket
+        const p = participants;
+        const count = p.length;
+
+        // Final
+        const finalMatch = await tx.match.create({
+          data: {
+            tournamentId,
+            categoryId,
+            stage: 'KNOCKOUT',
+            round: 'Grand Final',
+            roundNumber: count <= 4 ? 2 : 3,
+            matchNumber: 1,
+            bracketPosition: 1,
+            sideAType: 'PLAYER',
+            sideAId: 'TBD',
+            sideAName: 'Winner Semi Final 1',
+            sideBType: 'PLAYER',
+            sideBId: 'TBD',
+            sideBName: 'Winner Semi Final 2',
+            status: 'SCHEDULED',
+          },
+        });
+
+        // Semi Finals
+        const sf1 = await tx.match.create({
+          data: {
+            tournamentId,
+            categoryId,
+            stage: 'KNOCKOUT',
+            round: 'Semi Finals',
+            roundNumber: count <= 4 ? 1 : 2,
+            matchNumber: 1,
+            bracketPosition: 1,
+            sideAType: p[0]?.type || 'PLAYER',
+            sideAId: p[0]?.id || 'TBD',
+            sideAName: p[0]?.name || 'Winner QF 1',
+            sideBType: p[3]?.type || 'PLAYER',
+            sideBId: p[3]?.id || 'TBD',
+            sideBName: p[3]?.name || 'Winner QF 2',
+            status: 'SCHEDULED',
+            nextMatchId: finalMatch.id,
+            nextMatchSlot: 'A',
+          },
+        });
+
+        const sf2 = await tx.match.create({
+          data: {
+            tournamentId,
+            categoryId,
+            stage: 'KNOCKOUT',
+            round: 'Semi Finals',
+            roundNumber: count <= 4 ? 1 : 2,
+            matchNumber: 2,
+            bracketPosition: 2,
+            sideAType: p[1]?.type || 'PLAYER',
+            sideAId: p[1]?.id || 'TBD',
+            sideAName: p[1]?.name || 'Winner QF 3',
+            sideBType: p[2]?.type || 'PLAYER',
+            sideBId: p[2]?.id || 'TBD',
+            sideBName: p[2]?.name || 'Winner QF 4',
+            status: 'SCHEDULED',
+            nextMatchId: finalMatch.id,
+            nextMatchSlot: 'B',
+          },
+        });
+
+        const resultMatches = [finalMatch, sf1, sf2];
+
+        if (count >= 8) {
+          const qf1 = await tx.match.create({
+            data: {
+              tournamentId,
+              categoryId,
+              stage: 'KNOCKOUT',
+              round: 'Quarter Finals',
+              roundNumber: 1,
+              matchNumber: 1,
+              bracketPosition: 1,
+              sideAType: p[0]?.type || 'PLAYER',
+              sideAId: p[0]?.id || 'p1',
+              sideAName: p[0]?.name || 'Player 1',
+              sideBType: p[7]?.type || 'PLAYER',
+              sideBId: p[7]?.id || 'p8',
+              sideBName: p[7]?.name || 'Player 8',
+              status: 'SCHEDULED',
+              nextMatchId: sf1.id,
+              nextMatchSlot: 'A',
+            },
+          });
+
+          const qf2 = await tx.match.create({
+            data: {
+              tournamentId,
+              categoryId,
+              stage: 'KNOCKOUT',
+              round: 'Quarter Finals',
+              roundNumber: 1,
+              matchNumber: 2,
+              bracketPosition: 2,
+              sideAType: p[3]?.type || 'PLAYER',
+              sideAId: p[3]?.id || 'p4',
+              sideAName: p[3]?.name || 'Player 4',
+              sideBType: p[4]?.type || 'PLAYER',
+              sideBId: p[4]?.id || 'p5',
+              sideBName: p[4]?.name || 'Player 5',
+              status: 'SCHEDULED',
+              nextMatchId: sf1.id,
+              nextMatchSlot: 'B',
+            },
+          });
+
+          const qf3 = await tx.match.create({
+            data: {
+              tournamentId,
+              categoryId,
+              stage: 'KNOCKOUT',
+              round: 'Quarter Finals',
+              roundNumber: 1,
+              matchNumber: 3,
+              bracketPosition: 3,
+              sideAType: p[1]?.type || 'PLAYER',
+              sideAId: p[1]?.id || 'p2',
+              sideAName: p[1]?.name || 'Player 2',
+              sideBType: p[6]?.type || 'PLAYER',
+              sideBId: p[6]?.id || 'p7',
+              sideBName: p[6]?.name || 'Player 7',
+              status: 'SCHEDULED',
+              nextMatchId: sf2.id,
+              nextMatchSlot: 'A',
+            },
+          });
+
+          const qf4 = await tx.match.create({
+            data: {
+              tournamentId,
+              categoryId,
+              stage: 'KNOCKOUT',
+              round: 'Quarter Finals',
+              roundNumber: 1,
+              matchNumber: 4,
+              bracketPosition: 4,
+              sideAType: p[2]?.type || 'PLAYER',
+              sideAId: p[2]?.id || 'p3',
+              sideAName: p[2]?.name || 'Player 3',
+              sideBType: p[5]?.type || 'PLAYER',
+              sideBId: p[5]?.id || 'p6',
+              sideBName: p[5]?.name || 'Player 6',
+              status: 'SCHEDULED',
+              nextMatchId: sf2.id,
+              nextMatchSlot: 'B',
+            },
+          });
+
+          resultMatches.push(qf1, qf2, qf3, qf4);
+        }
+
+        return resultMatches;
+      }
+    });
+
+    await logAudit({
+      userId: req.user?.id,
+      action: 'FIXTURE_CHANGED',
+      entity: 'Match',
+      metadata: { tournamentId, categoryId, totalTeams, format: totalTeams > 8 ? 'GROUP_KNOCKOUT' : 'KNOCKOUT' },
+    });
+
+    res.status(201).json({
+      message: `Fixtures generated successfully for ${totalTeams} teams.`,
+      format: totalTeams > 8 ? 'GROUP_KNOCKOUT' : 'KNOCKOUT',
+      count: createdMatches.length,
+    });
+  } catch (err: any) {
+    console.error('[Generate Fixtures Error]', err);
+    res.status(500).json({ error: 'Failed to generate fixtures', details: err.message });
+  }
+});
+
 

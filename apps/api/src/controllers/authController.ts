@@ -16,7 +16,7 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const { email, password } = result.data;
+    const { email, password } = result.data as { email: string; password: string };
 
     if (!process.env.DATABASE_URL) {
       res.status(503).json({

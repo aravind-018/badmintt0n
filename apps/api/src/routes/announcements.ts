@@ -97,7 +97,13 @@ announcementRouter.put(
   async (req: AuthRequest, res: Response) => {
     try {
       const { id } = req.params;
-      const { title, body, publishedAt, expiresAt } = req.body;
+      const result = announcementSchema.partial().safeParse(req.body);
+      if (!result.success) {
+        res.status(400).json({ error: 'Validation error', details: result.error.errors.map((e) => e.message) });
+        return;
+      }
+
+      const { title, body, publishedAt, expiresAt } = result.data;
 
       const updated = await prisma.announcement.update({
         where: { id },

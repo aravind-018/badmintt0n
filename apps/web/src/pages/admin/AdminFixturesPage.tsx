@@ -3,7 +3,27 @@ import { Link } from 'react-router-dom';
 import { AdminLayout } from '../../components/AdminLayout';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Calendar, Plus, Search, Filter, Edit, Trash2, Zap, Clock, MapPin, X, AlertTriangle, Radio } from 'lucide-react';
+import { ConfirmModal } from '../../components/ConfirmModal';
+import { VisualBracketTree } from '../../components/VisualBracketTree';
+import { GroupStageView } from '../../components/GroupStageView';
+import {
+  Calendar,
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  Zap,
+  Clock,
+  MapPin,
+  X,
+  Radio,
+  Layers,
+  List,
+  Shield,
+  Loader2,
+  AlertTriangle,
+  Info,
+} from 'lucide-react';
 
 export const AdminFixturesPage: React.FC = () => {
   const { accessToken } = useAuth();
@@ -14,8 +34,15 @@ export const AdminFixturesPage: React.FC = () => {
   const [categories, setCategories] = useState<any[]>([]);
   const [courts, setCourts] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
-  const [players, setPlayers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Standings state
+  const [groupStandings, setGroupStandings] = useState<Record<string, any[]>>({});
+  const [groupProgress, setGroupProgress] = useState<any>(null);
+
+  // Navigation / View state
+  const [viewMode, setViewMode] = useState<'BRACKET_TREE' | 'LIST_VIEW'>('BRACKET_TREE');
+  const [stageTab, setStageTab] = useState<'GROUP_STAGE' | 'KNOCKOUT'>('KNOCKOUT');
 
   // Filters
   const [search, setSearch] = useState('');
@@ -24,77 +51,25 @@ export const AdminFixturesPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [roundFilter, setRoundFilter] = useState('');
 
-  // Modals
+  // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isGeneratorModalOpen, setIsGeneratorModalOpen] = useState(false);
+  const [generatorPreview, setGeneratorPreview] = useState<any | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+
   const [editingMatch, setEditingMatch] = useState<any | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [isDeletingSingle, setIsDeletingSingle] = useState(false);
 
   const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
-  const [deleteAllInput, setDeleteAllInput] = useState('');
   const [isDeletingAll, setIsDeletingAll] = useState(false);
-
-  const [isDeleteBracketModalOpen, setIsDeleteBracketModalOpen] = useState(false);
-  const [deleteBracketInput, setDeleteBracketInput] = useState('');
-  const [isDeletingBracket, setIsDeletingBracket] = useState(false);
-
-  const handleDeleteAllFixtures = async () => {
-    if (deleteAllInput !== 'DELETE') return;
-    setIsDeletingAll(true);
-    try {
-      let url = '/api/v1/matches/all';
-      if (tournamentId) url += `?tournamentId=${tournamentId}`;
-      const res = await fetch(url, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        showToast(data.error || 'Failed to delete all fixtures', 'error');
-      } else {
-        showToast('All fixtures deleted successfully');
-        setIsDeleteAllModalOpen(false);
-        setDeleteAllInput('');
-        fetchData();
-      }
-    } catch (err) {
-      showToast('Network error while deleting fixtures', 'error');
-    } finally {
-      setIsDeletingAll(false);
-    }
-  };
-
-  const handleDeleteAllBrackets = async () => {
-    if (deleteBracketInput !== 'DELETE') return;
-    setIsDeletingBracket(true);
-    try {
-      let url = '/api/v1/matches/brackets/all';
-      if (tournamentId) url += `?tournamentId=${tournamentId}`;
-      const res = await fetch(url, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        showToast(data.error || 'Failed to delete bracket matches', 'error');
-      } else {
-        showToast('Bracket matches deleted successfully');
-        setIsDeleteBracketModalOpen(false);
-        setDeleteBracketInput('');
-        fetchData();
-      }
-    } catch (err) {
-      showToast('Network error while deleting bracket matches', 'error');
-    } finally {
-      setIsDeletingBracket(false);
-    }
-  };
 
   // Form states
   const [tournamentId, setTournamentId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [courtId, setCourtId] = useState('');
-  const [round, setRound] = useState('Quarter Final');
+  const [round, setRound] = useState('Quarter Finals');
   const [scheduledAt, setScheduledAt] = useState('');
   const [sideAName, setSideAName] = useState('');
   const [sideBName, setSideBName] = useState('');
@@ -103,37 +78,26 @@ export const AdminFixturesPage: React.FC = () => {
   const [targetPoints, setTargetPoints] = useState<number>(21);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Quick participant picker state
-  const [sideAPlayer1, setSideAPlayer1] = useState('');
-  const [sideAPlayer2, setSideAPlayer2] = useState('');
-  const [sideBPlayer1, setSideBPlayer1] = useState('');
-  const [sideBPlayer2, setSideBPlayer2] = useState('');
-
-  // Generator states
-  const [generatorType, setGeneratorType] = useState<'KNOCKOUT' | 'ROUND_ROBIN'>('KNOCKOUT');
-
   const selectedCategoryObj = categories.find((c) => c.id === categoryId);
   const isDoublesCategory = selectedCategoryObj?.type?.includes('DOUBLES');
-
   const [sideATeamId, setSideATeamId] = useState('');
   const [sideBTeamId, setSideBTeamId] = useState('');
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      let query = `/api/v1/matches?search=${encodeURIComponent(search)}`;
+      let query = `/api/v1/matches?search=${encodeURIComponent(search.trim())}`;
       if (categoryFilter) query += `&categoryId=${categoryFilter}`;
       if (courtFilter) query += `&courtId=${courtFilter}`;
       if (statusFilter) query += `&status=${statusFilter}`;
       if (roundFilter) query += `&round=${encodeURIComponent(roundFilter)}`;
 
-      const [matchRes, tournRes, catRes, courtRes, teamRes, playerRes] = await Promise.all([
+      const [matchRes, tournRes, catRes, courtRes, teamRes] = await Promise.all([
         fetch(query),
         fetch('/api/v1/tournaments'),
         fetch('/api/v1/categories'),
         fetch('/api/v1/courts'),
         fetch('/api/v1/teams'),
-        fetch('/api/v1/players'),
       ]);
 
       const mData = await matchRes.json();
@@ -141,20 +105,22 @@ export const AdminFixturesPage: React.FC = () => {
       const cData = await catRes.json();
       const crtData = await courtRes.json();
       const tmData = await teamRes.json();
-      const plData = await playerRes.json();
 
       setMatches(mData.matches || []);
       setTournaments(tData.tournaments || []);
       setCategories(cData.categories || []);
       setCourts(crtData.courts || []);
       setTeams(tmData.teams || []);
-      setPlayers(plData.players || []);
 
-      if (tData.tournaments?.length > 0 && !tournamentId) {
-        setTournamentId(tData.tournaments[0].id);
-      }
-      if (cData.categories?.length > 0 && !categoryId) {
-        setCategoryId(cData.categories[0].id);
+      const activeTournId = tData.tournaments?.length > 0 ? tData.tournaments[0].id : '';
+      const activeCatId = categoryFilter || (cData.categories?.length > 0 ? cData.categories[0].id : '');
+
+      if (activeTournId && !tournamentId) setTournamentId(activeTournId);
+      if (activeCatId && !categoryId) setCategoryId(activeCatId);
+
+      // Fetch group standings if tournament & category exist
+      if (activeTournId && activeCatId) {
+        fetchGroupStandings(activeTournId, activeCatId);
       }
     } catch (err) {
       showToast('Failed to load matches', 'error');
@@ -163,6 +129,23 @@ export const AdminFixturesPage: React.FC = () => {
     }
   };
 
+  const fetchGroupStandings = async (tId: string, cId: string) => {
+    try {
+      const res = await fetch(`/api/v1/matches/group-standings?tournamentId=${tId}&categoryId=${cId}`);
+      const data = await res.json();
+      if (res.ok) {
+        setGroupStandings(data.groups || {});
+        setGroupProgress(data.progress || null);
+      }
+    } catch (err) {
+      console.error('Failed to fetch group standings:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [search, categoryFilter, courtFilter, statusFilter, roundFilter]);
+
   const handleSelectTeamForSide = (side: 'A' | 'B', selectedTeamId: string) => {
     if (!selectedTeamId) return;
     const team = teams.find((t) => t.id === selectedTeamId);
@@ -170,28 +153,18 @@ export const AdminFixturesPage: React.FC = () => {
 
     if (side === 'A') {
       setSideATeamId(selectedTeamId);
-      if (selectedTeamId === sideBTeamId) {
-        setFormError('A team cannot play against itself.');
-      } else {
-        setFormError(null);
-      }
+      if (selectedTeamId === sideBTeamId) setFormError('A team cannot play against itself.');
+      else setFormError(null);
     } else {
       setSideBTeamId(selectedTeamId);
-      if (selectedTeamId === sideATeamId) {
-        setFormError('A team cannot play against itself.');
-      } else {
-        setFormError(null);
-      }
+      if (selectedTeamId === sideATeamId) setFormError('A team cannot play against itself.');
+      else setFormError(null);
     }
 
     if (isDoublesCategory) {
       if (team.teamPlayers && team.teamPlayers.length >= 2) {
         const pairNames = team.teamPlayers.map((tp: any) => tp.player.name).slice(0, 2).join(' / ');
         const fullName = `${pairNames} (${team.name})`;
-        if (side === 'A') setSideAName(fullName);
-        else setSideBName(fullName);
-      } else if (team.teamPlayers && team.teamPlayers.length === 1) {
-        const fullName = `${team.teamPlayers[0].player.name} (${team.name})`;
         if (side === 'A') setSideAName(fullName);
         else setSideBName(fullName);
       } else {
@@ -204,15 +177,11 @@ export const AdminFixturesPage: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [search, categoryFilter, courtFilter, statusFilter, roundFilter]);
-
   const openCreateModal = () => {
     setEditingMatch(null);
-    setRound('Quarter Final');
+    setRound('Quarter Finals');
     setCourtId(courts[0]?.id || '');
-    setScheduledAt('2026-10-18T10:00');
+    setScheduledAt('');
     setSideAName('');
     setSideBName('');
     setSideATeamId('');
@@ -229,7 +198,7 @@ export const AdminFixturesPage: React.FC = () => {
     setTournamentId(m.tournamentId);
     setCategoryId(m.categoryId);
     setCourtId(m.courtId || '');
-    setRound(m.round || 'Round 1');
+    setRound(m.round || 'Quarter Finals');
     setScheduledAt(m.scheduledAt ? new Date(m.scheduledAt).toISOString().slice(0, 16) : '');
     setSideAName(m.sideAName);
     setSideBName(m.sideBName);
@@ -246,15 +215,15 @@ export const AdminFixturesPage: React.FC = () => {
     e.preventDefault();
     setFormError(null);
 
-    if (!tournamentId || !categoryId || !sideAName || !sideBName) {
+    const trimmedSideA = sideAName.trim();
+    const trimmedSideB = sideBName.trim();
+
+    if (!tournamentId || !categoryId || !trimmedSideA || !trimmedSideB) {
       setFormError('Tournament, Category, and Participant names are required.');
       return;
     }
 
-    if (
-      sideAName.trim().toLowerCase() === sideBName.trim().toLowerCase() ||
-      (sideATeamId && sideATeamId === sideBTeamId)
-    ) {
+    if (trimmedSideA.toLowerCase() === trimmedSideB.toLowerCase()) {
       setFormError('A team cannot play against itself.');
       return;
     }
@@ -262,16 +231,18 @@ export const AdminFixturesPage: React.FC = () => {
     const payload = {
       tournamentId,
       categoryId,
-      courtId: courtId || null,
-      round,
-      scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
-      sideAName,
-      sideAId: sideATeamId || editingMatch?.sideAId || 'p-' + Date.now() + '-a',
-      sideBName,
-      sideBId: sideBTeamId || editingMatch?.sideBId || 'p-' + Date.now() + '-b',
+      courtId: courtId || undefined,
+      round: round.trim() || 'Quarter Finals',
+      scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
+      sideAType: sideATeamId ? 'TEAM' : 'PLAYER',
+      sideAId: sideATeamId || 'TBD',
+      sideAName: trimmedSideA,
+      sideBType: sideBTeamId ? 'TEAM' : 'PLAYER',
+      sideBId: sideBTeamId || 'TBD',
+      sideBName: trimmedSideB,
       status,
-      winnerId: winnerId || null,
-      targetPoints: Number(targetPoints),
+      winnerId: winnerId || undefined,
+      targetPoints,
     };
 
     const url = editingMatch ? `/api/v1/matches/${editingMatch.id}` : '/api/v1/matches';
@@ -293,7 +264,7 @@ export const AdminFixturesPage: React.FC = () => {
         return;
       }
 
-      showToast(editingMatch ? 'Fixture updated successfully!' : 'Fixture created successfully!');
+      showToast(editingMatch ? 'Fixture updated successfully' : 'Fixture created successfully');
       setIsCreateModalOpen(false);
       fetchData();
     } catch (err) {
@@ -301,47 +272,72 @@ export const AdminFixturesPage: React.FC = () => {
     }
   };
 
-  const handleGenerateFixtures = async () => {
+  const openGeneratorModal = async () => {
     if (!tournamentId || !categoryId) {
-      showToast('Please select a Tournament and Category', 'error');
+      showToast('Please select a Tournament and Category first', 'error');
       return;
     }
 
-    const endpoint =
-      generatorType === 'KNOCKOUT'
-        ? '/api/v1/matches/generate-knockout'
-        : '/api/v1/matches/generate-round-robin';
+    setIsGeneratorModalOpen(true);
+    setIsPreviewLoading(true);
+    setGeneratorPreview(null);
 
     try {
-      const res = await fetch(endpoint, {
+      const res = await fetch('/api/v1/matches/preview-fixtures', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({
-          tournamentId,
-          categoryId,
-          courtIds: courts.map((c) => c.id),
-        }),
+        body: JSON.stringify({ tournamentId, categoryId }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setGeneratorPreview(data.preview);
+      } else {
+        showToast(data.error || 'Failed to load fixture preview', 'error');
+      }
+    } catch (err) {
+      showToast('Network error while loading preview', 'error');
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  const handleConfirmGenerateFixtures = async (confirmRegenerate = false) => {
+    if (isGenerating) return;
+
+    setIsGenerating(true);
+    try {
+      const res = await fetch('/api/v1/matches/generate-fixtures', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ tournamentId, categoryId, confirmRegenerate }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        showToast(data.error || 'Generator failed', 'error');
+        showToast(data.error || 'Failed to generate fixtures', 'error');
       } else {
-        showToast(data.message || 'Fixtures generated!');
+        showToast(data.message || 'Fixtures generated successfully!');
         setIsGeneratorModalOpen(false);
         fetchData();
       }
     } catch (err) {
-      showToast('Network error generating fixtures', 'error');
+      showToast('Network error while generating fixtures', 'error');
+    } finally {
+      setIsGenerating(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteTargetId) return;
+  const handleDeleteSingleMatch = async () => {
+    if (!deleteTargetId || isDeletingSingle) return;
 
+    setIsDeletingSingle(true);
     try {
       const res = await fetch(`/api/v1/matches/${deleteTargetId}`, {
         method: 'DELETE',
@@ -355,53 +351,74 @@ export const AdminFixturesPage: React.FC = () => {
         fetchData();
       }
     } catch (err) {
-      showToast('Network error', 'error');
+      showToast('Network error while deleting fixture', 'error');
     } finally {
+      setIsDeletingSingle(false);
       setDeleteTargetId(null);
+    }
+  };
+
+  const handleDeleteAllFixtures = async () => {
+    if (isDeletingAll) return;
+
+    setIsDeletingAll(true);
+    try {
+      let url = '/api/v1/matches/all';
+      if (tournamentId) url += `?tournamentId=${tournamentId}`;
+      const res = await fetch(url, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast(data.error || 'Failed to delete all fixtures', 'error');
+      } else {
+        showToast(data.message || 'All fixtures deleted successfully');
+        setIsDeleteAllModalOpen(false);
+        fetchData();
+      }
+    } catch (err) {
+      showToast('Network error while deleting fixtures', 'error');
+    } finally {
+      setIsDeletingAll(false);
     }
   };
 
   return (
     <AdminLayout>
       <div className="space-y-6">
-        {/* Header bar */}
+        {/* Header Bar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h2 className="text-2xl font-extrabold text-white flex items-center gap-2">
               <Calendar className="w-6 h-6 text-brand-500" /> Fixture & Bracket Management
             </h2>
-            <p className="text-slate-400 text-xs mt-1">Schedule matches, assign courts, and auto-generate tournament brackets</p>
+            <p className="text-slate-400 text-xs mt-1">
+              Automated Group Stage (max 4 per group) & Knockout Bracket generator
+            </p>
           </div>
+
           <div className="flex items-center gap-2 flex-wrap">
             {matches.length > 0 && (
-              <>
-                <button
-                  onClick={() => {
-                    setDeleteAllInput('');
-                    setIsDeleteAllModalOpen(true);
-                  }}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-rose-400 font-semibold text-xs transition"
-                >
-                  <Trash2 className="w-4 h-4" /> Delete All Fixtures
-                </button>
-                <button
-                  onClick={() => {
-                    setDeleteBracketInput('');
-                    setIsDeleteBracketModalOpen(true);
-                  }}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-400 font-semibold text-xs transition"
-                >
-                  <Trash2 className="w-4 h-4" /> Clear Bracket
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => setIsDeleteAllModalOpen(true)}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-rose-400 font-semibold text-xs transition"
+              >
+                <Trash2 className="w-4 h-4" /> Clear All Fixtures
+              </button>
             )}
+
             <button
-              onClick={() => setIsGeneratorModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent-amber hover:bg-amber-600 text-dark-900 font-bold text-xs transition shadow-lg"
+              type="button"
+              onClick={openGeneratorModal}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent-amber hover:bg-amber-600 text-dark-900 font-bold text-xs transition shadow-lg glow-cyan"
             >
-              <Zap className="w-4 h-4" /> Auto Bracket Generator
+              <Zap className="w-4 h-4" /> Generate Fixtures
             </button>
+
             <button
+              type="button"
               onClick={openCreateModal}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition shadow-lg glow-green"
             >
@@ -410,7 +427,56 @@ export const AdminFixturesPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Filter Bar */}
+        {/* View Controls & Category Bar */}
+        <div className="glass-card p-4 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-slate-700/60">
+          {/* Stage Tabs */}
+          <div className="flex items-center gap-2 bg-dark-800 p-1.5 rounded-xl border border-slate-700">
+            <button
+              type="button"
+              onClick={() => setStageTab('KNOCKOUT')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                stageTab === 'KNOCKOUT' ? 'bg-brand-600 text-white shadow' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" /> Knockout Bracket
+            </button>
+            <button
+              type="button"
+              onClick={() => setStageTab('GROUP_STAGE')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                stageTab === 'GROUP_STAGE' ? 'bg-brand-600 text-white shadow' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5" /> Group Stage
+            </button>
+          </div>
+
+          {/* Bracket Tree vs List View Toggle */}
+          {stageTab === 'KNOCKOUT' && (
+            <div className="flex items-center gap-2 bg-dark-800 p-1.5 rounded-xl border border-slate-700">
+              <button
+                type="button"
+                onClick={() => setViewMode('BRACKET_TREE')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  viewMode === 'BRACKET_TREE' ? 'bg-accent-amber text-dark-900 shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" /> Bracket Tree
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('LIST_VIEW')}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  viewMode === 'LIST_VIEW' ? 'bg-accent-amber text-dark-900 shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <List className="w-3.5 h-3.5" /> List View
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Filters Bar */}
         <div className="glass-card p-4 rounded-2xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 text-xs">
           <div className="relative md:col-span-2">
             <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
@@ -425,7 +491,10 @@ export const AdminFixturesPage: React.FC = () => {
 
           <select
             value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            onChange={(e) => {
+              setCategoryFilter(e.target.value);
+              if (tournamentId && e.target.value) fetchGroupStandings(tournamentId, e.target.value);
+            }}
             className="py-2 px-3 rounded-xl bg-dark-800 border border-slate-700/80 text-white focus:outline-none"
           >
             <option value="">All Categories</option>
@@ -462,87 +531,94 @@ export const AdminFixturesPage: React.FC = () => {
           </select>
         </div>
 
-        {/* Fixtures List */}
+        {/* Content Display */}
         {loading ? (
-          <div className="py-12 text-center text-slate-400 text-sm">Loading fixtures...</div>
-        ) : matches.length === 0 ? (
-          <div className="glass-card p-12 rounded-2xl text-center space-y-3">
-            <Calendar className="w-12 h-12 text-slate-600 mx-auto" />
-            <h3 className="text-lg font-bold text-white">No Fixtures Scheduled</h3>
-            <p className="text-slate-400 text-xs">Use the Auto Bracket Generator or click &apos;Add Fixture&apos;.</p>
+          <div className="py-16 text-center text-slate-400 text-sm flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-brand-500" /> Loading fixtures & standings...
           </div>
+        ) : stageTab === 'GROUP_STAGE' ? (
+          <GroupStageView groups={groupStandings} progress={groupProgress} />
+        ) : viewMode === 'BRACKET_TREE' ? (
+          <VisualBracketTree matches={matches} onSelectMatch={(m) => openEditModal(m)} />
         ) : (
+          /* List View */
           <div className="space-y-3">
-            {matches.map((m) => (
-              <div
-                key={m.id}
-                className="glass-card glass-card-hover p-4 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-l-4 border-l-brand-500"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-[11px]">
-                    <span className="font-bold text-brand-400 uppercase">{m.round || 'Match'}</span>
-                    <span className="text-slate-500">•</span>
-                    <span className="text-accent-cyan font-semibold">{m.category?.type?.replace('_', ' ') || 'Singles'}</span>
-                    <span className="text-slate-500">•</span>
-                    <span
-                      className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
-                        m.status === 'COMPLETED'
-                          ? 'bg-brand-500/20 text-brand-400'
-                          : m.status === 'LIVE'
-                          ? 'bg-rose-500/20 text-rose-400 animate-pulse'
-                          : 'bg-dark-800 text-slate-300'
-                      }`}
-                    >
-                      {m.status}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-4 text-base font-bold text-white py-1">
-                    <span className={m.winnerId === m.sideAId ? 'text-brand-400 font-extrabold' : ''}>
-                      {m.sideAName}
-                    </span>
-                    <span className="text-slate-500 text-xs font-normal">vs</span>
-                    <span className={m.winnerId === m.sideBId ? 'text-brand-400 font-extrabold' : ''}>
-                      {m.sideBName}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-6 text-xs text-slate-400 w-full md:w-auto justify-between md:justify-end">
-                  <div className="space-y-1 text-right">
-                    <div className="flex items-center gap-1.5 justify-end">
-                      <Clock className="w-3.5 h-3.5 text-accent-amber" />
-                      <span>{m.scheduledAt ? new Date(m.scheduledAt).toLocaleString() : 'TBD'}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 justify-end">
-                      <MapPin className="w-3.5 h-3.5 text-slate-500" />
-                      <span>{m.court?.name || 'Court Unassigned'}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Link
-                      to={`/scorer/match/${m.id}`}
-                      className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-bold text-xs border border-amber-500/30 transition flex items-center gap-1"
-                    >
-                      <Radio className="w-3.5 h-3.5" /> Score
-                    </Link>
-                    <button
-                      onClick={() => openEditModal(m)}
-                      className="p-2 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setDeleteTargetId(m.id)}
-                      className="p-2 rounded-xl bg-dark-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 transition"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+            {matches.length === 0 ? (
+              <div className="glass-card p-12 rounded-2xl text-center space-y-3">
+                <Calendar className="w-12 h-12 text-slate-600 mx-auto" />
+                <h3 className="text-lg font-bold text-white">No Fixtures Scheduled</h3>
+                <p className="text-slate-400 text-xs">Use the Auto Fixture Generator or click &apos;Add Fixture&apos;.</p>
               </div>
-            ))}
+            ) : (
+              matches.map((m) => (
+                <div
+                  key={m.id}
+                  className="glass-card glass-card-hover p-4 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-l-4 border-l-brand-500"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="font-bold text-brand-400 uppercase">{m.round || 'Match'}</span>
+                      <span className="text-slate-500">•</span>
+                      <span className="text-accent-cyan font-semibold">{m.category?.type?.replace('_', ' ') || 'Singles'}</span>
+                      <span className="text-slate-500">•</span>
+                      <span
+                        className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
+                          m.status === 'COMPLETED'
+                            ? 'bg-brand-500/20 text-brand-400'
+                            : m.status === 'LIVE'
+                            ? 'bg-rose-500/20 text-rose-400 animate-pulse'
+                            : 'bg-dark-800 text-slate-300'
+                        }`}
+                      >
+                        {m.status}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-base font-bold text-white py-1">
+                      <span className={m.winnerId === m.sideAId ? 'text-brand-400 font-extrabold' : ''}>{m.sideAName}</span>
+                      <span className="text-slate-500 text-xs font-normal">vs</span>
+                      <span className={m.winnerId === m.sideBId ? 'text-brand-400 font-extrabold' : ''}>{m.sideBName}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-6 text-xs text-slate-400 w-full md:w-auto justify-between md:justify-end">
+                    <div className="space-y-1 text-right">
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <Clock className="w-3.5 h-3.5 text-accent-amber" />
+                        <span>{m.scheduledAt ? new Date(m.scheduledAt).toLocaleString() : 'TBD'}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <MapPin className="w-3.5 h-3.5 text-slate-500" />
+                        <span>{m.court?.name || 'Court Unassigned'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Link
+                        to={`/scorer/match/${m.id}`}
+                        className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-bold text-xs border border-amber-500/30 transition flex items-center gap-1"
+                      >
+                        <Radio className="w-3.5 h-3.5" /> Score
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(m)}
+                        className="p-2 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTargetId(m.id)}
+                        className="p-2 rounded-xl bg-dark-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>
@@ -553,18 +629,16 @@ export const AdminFixturesPage: React.FC = () => {
           <div className="glass-card max-w-lg w-full p-6 rounded-2xl space-y-4 shadow-2xl border border-slate-700">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-white">{editingMatch ? 'Edit Fixture' : 'Create Fixture'}</h3>
-              <button onClick={() => setIsCreateModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button type="button" onClick={() => setIsCreateModalOpen(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {formError && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
-                {formError}
-              </div>
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">{formError}</div>
             )}
 
-            <form onSubmit={handleSaveMatch} className="space-y-3 text-xs">
+            <form onSubmit={handleSaveMatch} className="space-y-3 text-xs" noValidate>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-300 font-semibold mb-1">Tournament *</label>
@@ -598,12 +672,6 @@ export const AdminFixturesPage: React.FC = () => {
                 </div>
               </div>
 
-              {isDoublesCategory && (
-                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] flex items-center justify-between">
-                  <span>🏸 <strong>Doubles Category Detected:</strong> Select teams to auto-combine players (e.g. Player 1 / Player 2) or enter pair names manually.</span>
-                </div>
-              )}
-
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -611,33 +679,23 @@ export const AdminFixturesPage: React.FC = () => {
                     {teams.length > 0 && (
                       <select
                         onChange={(e) => handleSelectTeamForSide('A', e.target.value)}
-                        className="text-[10px] bg-dark-800 border border-slate-700 text-brand-400 rounded px-1.5 py-0.5 focus:outline-none"
+                        className="text-[10px] bg-dark-800 border border-slate-700 text-brand-400 rounded px-1.5 py-0.5"
                         defaultValue=""
                       >
                         <option value="" disabled>Pick Team...</option>
-                        {teams.map((t) => {
-                          const isDisabled = t.id === sideBTeamId || t.name.trim().toLowerCase() === sideBName.trim().toLowerCase();
-                          return (
-                            <option key={t.id} value={t.id} disabled={isDisabled}>
-                              {t.name} ({t.teamPlayers?.length || 0} players){isDisabled ? ' (Selected)' : ''}
-                            </option>
-                          );
-                        })}
+                        {teams.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
                       </select>
                     )}
                   </div>
                   <input
                     type="text"
                     value={sideAName}
-                    onChange={(e) => {
-                      setSideAName(e.target.value);
-                      if (e.target.value && e.target.value.trim().toLowerCase() === sideBName.trim().toLowerCase()) {
-                        setFormError('A team cannot play against itself.');
-                      } else {
-                        setFormError(null);
-                      }
-                    }}
-                    placeholder={isDoublesCategory ? "Player 1 / Player 2" : "Viktor Axelsen"}
+                    onChange={(e) => setSideAName(e.target.value)}
+                    placeholder="Team A Name"
                     className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white"
                     required
                   />
@@ -649,33 +707,23 @@ export const AdminFixturesPage: React.FC = () => {
                     {teams.length > 0 && (
                       <select
                         onChange={(e) => handleSelectTeamForSide('B', e.target.value)}
-                        className="text-[10px] bg-dark-800 border border-slate-700 text-brand-400 rounded px-1.5 py-0.5 focus:outline-none"
+                        className="text-[10px] bg-dark-800 border border-slate-700 text-brand-400 rounded px-1.5 py-0.5"
                         defaultValue=""
                       >
                         <option value="" disabled>Pick Team...</option>
-                        {teams.map((t) => {
-                          const isDisabled = t.id === sideATeamId || t.name.trim().toLowerCase() === sideAName.trim().toLowerCase();
-                          return (
-                            <option key={t.id} value={t.id} disabled={isDisabled}>
-                              {t.name} ({t.teamPlayers?.length || 0} players){isDisabled ? ' (Selected)' : ''}
-                            </option>
-                          );
-                        })}
+                        {teams.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
                       </select>
                     )}
                   </div>
                   <input
                     type="text"
                     value={sideBName}
-                    onChange={(e) => {
-                      setSideBName(e.target.value);
-                      if (e.target.value && e.target.value.trim().toLowerCase() === sideAName.trim().toLowerCase()) {
-                        setFormError('A team cannot play against itself.');
-                      } else {
-                        setFormError(null);
-                      }
-                    }}
-                    placeholder={isDoublesCategory ? "Player 3 / Player 4" : "Shi Yuqi"}
+                    onChange={(e) => setSideBName(e.target.value)}
+                    placeholder="Team B Name"
                     className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white"
                     required
                   />
@@ -689,12 +737,12 @@ export const AdminFixturesPage: React.FC = () => {
                     type="text"
                     value={round}
                     onChange={(e) => setRound(e.target.value)}
-                    placeholder="Quarter Final / Semi Final / Final"
+                    placeholder="Quarter Finals"
                     className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Assign Court</label>
+                  <label className="block text-slate-300 font-semibold mb-1">Court</label>
                   <select
                     value={courtId}
                     onChange={(e) => setCourtId(e.target.value)}
@@ -709,50 +757,6 @@ export const AdminFixturesPage: React.FC = () => {
                   </select>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Target Score (Max Points)</label>
-                  <select
-                    value={targetPoints}
-                    onChange={(e) => setTargetPoints(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-amber-400 font-bold"
-                  >
-                    <option value={21}>21 Points (BWF Standard)</option>
-                    <option value={15}>15 Points (Medium Format)</option>
-                    <option value={11}>11 Points (Fast Format)</option>
-                    <option value={30}>30 Points (Single Game / Extended)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Status</label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white"
-                  >
-                    <option value="SCHEDULED">SCHEDULED</option>
-                    <option value="LIVE">LIVE</option>
-                    <option value="COMPLETED">COMPLETED</option>
-                    <option value="CANCELLED">CANCELLED</option>
-                  </select>
-                </div>
-              </div>
-
-              {status === 'COMPLETED' && (
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Select Winner</label>
-                  <select
-                    value={winnerId}
-                    onChange={(e) => setWinnerId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white font-bold"
-                  >
-                    <option value="">No Winner Selected</option>
-                    {editingMatch?.sideAId && <option value={editingMatch.sideAId}>Side A: {sideAName}</option>}
-                    {editingMatch?.sideBId && <option value={editingMatch.sideBId}>Side B: {sideBName}</option>}
-                  </select>
-                </div>
-              )}
 
               <div className="pt-3 flex justify-end gap-2">
                 <button
@@ -774,218 +778,132 @@ export const AdminFixturesPage: React.FC = () => {
         </div>
       )}
 
-      {/* Auto Bracket Generator Modal */}
+      {/* Fixture Generator & Preview Modal */}
       {isGeneratorModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card max-w-md w-full p-6 rounded-2xl space-y-4 shadow-2xl border border-amber-500/30">
+          <div className="glass-card max-w-lg w-full p-6 rounded-2xl space-y-5 shadow-2xl border border-amber-500/30">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <Zap className="w-5 h-5 text-accent-amber" /> Auto Bracket Generator
+                <Zap className="w-5 h-5 text-accent-amber" /> Fixture Generator Preview
               </h3>
-              <button onClick={() => setIsGeneratorModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button type="button" onClick={() => setIsGeneratorModalOpen(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-400">
-              Automatically generates match brackets (Round of 16, Quarter Finals, Semi Finals, Final) and links winner progression!
-            </p>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">Tournament</label>
-                <select
-                  value={tournamentId}
-                  onChange={(e) => setTournamentId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white"
-                >
-                  {tournaments.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
+            {isPreviewLoading ? (
+              <div className="py-12 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-accent-amber" /> Analyzing tournament format & team counts...
               </div>
+            ) : generatorPreview ? (
+              <div className="space-y-4 text-xs">
+                {/* Format Summary Card */}
+                <div className="p-4 rounded-xl bg-dark-800 border border-slate-700 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Tournament Format:</span>
+                    <span className="font-extrabold text-brand-400 uppercase">
+                      {generatorPreview.tournamentFormat === 'GROUP_KNOCKOUT'
+                        ? 'GROUP STAGE + KNOCKOUT'
+                        : 'SINGLE KNOCKOUT BRACKET'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Total Registered Teams:</span>
+                    <span className="font-bold text-white">{generatorPreview.totalTeams} teams</span>
+                  </div>
+                  {generatorPreview.numberOfGroups > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Number of Groups (max 4 per group):</span>
+                      <span className="font-bold text-accent-cyan">{generatorPreview.numberOfGroups} Groups</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Total Group Fixtures:</span>
+                    <span className="font-bold text-amber-400">{generatorPreview.totalGroupMatches} matches</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Qualification Setting:</span>
+                    <span className="font-bold text-emerald-400">{generatorPreview.qualificationRule}</span>
+                  </div>
+                </div>
 
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">Category</label>
-                <select
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white"
-                >
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.type.replace('_', ' ')}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                {/* Groups Breakdown */}
+                {generatorPreview.groups?.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-bold text-slate-300 text-xs uppercase tracking-wider">Group Distribution:</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      {generatorPreview.groups.map((g: any) => (
+                        <div key={g.id} className="p-3 rounded-xl bg-dark-900 border border-slate-800 text-[11px]">
+                          <div className="font-bold text-white flex justify-between">
+                            <span>{g.name}</span>
+                            <span className="text-brand-400">{g.teamCount} teams</span>
+                          </div>
+                          <p className="text-slate-400 mt-1 truncate">{g.teamNames.join(', ')}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-              <div>
-                <label className="block text-slate-300 font-semibold mb-1">Format Type</label>
-                <div className="grid grid-cols-2 gap-2">
+                {/* Existing Fixtures Warning */}
+                {generatorPreview.fixturesExist && (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <strong>Fixtures already exist for this tournament/category ({generatorPreview.existingMatchesCount} matches).</strong>
+                      <p className="mt-0.5 text-[11px] text-amber-200/80">Regenerating will rebuild the schedule and group stage.</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-800">
                   <button
                     type="button"
-                    onClick={() => setGeneratorType('KNOCKOUT')}
-                    className={`p-3 rounded-xl border text-center font-bold transition ${
-                      generatorType === 'KNOCKOUT'
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-400'
-                        : 'bg-dark-800 border-slate-700 text-slate-400'
-                    }`}
+                    onClick={() => setIsGeneratorModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs"
+                    disabled={isGenerating}
                   >
-                    Knockout Bracket
+                    Cancel
                   </button>
-
                   <button
                     type="button"
-                    onClick={() => setGeneratorType('ROUND_ROBIN')}
-                    className={`p-3 rounded-xl border text-center font-bold transition ${
-                      generatorType === 'ROUND_ROBIN'
-                        ? 'bg-amber-500/20 border-amber-500 text-amber-400'
-                        : 'bg-dark-800 border-slate-700 text-slate-400'
-                    }`}
+                    onClick={() => handleConfirmGenerateFixtures(generatorPreview.fixturesExist)}
+                    disabled={isGenerating}
+                    className="px-4 py-2.5 rounded-xl bg-accent-amber hover:bg-amber-600 text-dark-900 font-extrabold text-xs flex items-center gap-2 shadow-lg glow-cyan disabled:opacity-50"
                   >
-                    Round Robin
+                    {isGenerating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    {generatorPreview.fixturesExist ? 'Regenerate Fixtures' : 'Generate Fixtures'}
                   </button>
                 </div>
               </div>
-
-              <div className="pt-3 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsGeneratorModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleGenerateFixtures}
-                  className="px-4 py-2 rounded-xl bg-accent-amber hover:bg-amber-600 text-dark-900 font-bold shadow-lg"
-                >
-                  Generate Fixtures
-                </button>
-              </div>
-            </div>
+            ) : null}
           </div>
         </div>
       )}
 
-      {/* Delete Confirmation */}
-      {deleteTargetId && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card max-w-sm w-full p-6 rounded-2xl text-center space-y-4 border border-rose-500/30">
-            <AlertTriangle className="w-10 h-10 text-rose-500 mx-auto" />
-            <div>
-              <h3 className="text-lg font-bold text-white">Delete Fixture?</h3>
-              <p className="text-xs text-slate-400 mt-1">This action will remove the scheduled match.</p>
-            </div>
-            <div className="flex justify-center gap-3">
-              <button
-                onClick={() => setDeleteTargetId(null)}
-                className="px-4 py-2 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold"
-              >
-                Confirm Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete Single Match Confirmation Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deleteTargetId)}
+        title="Delete Fixture?"
+        message="This action will permanently remove this match from the schedule."
+        confirmText="Delete Fixture"
+        isDanger={true}
+        isLoading={isDeletingSingle}
+        onConfirm={handleDeleteSingleMatch}
+        onCancel={() => setDeleteTargetId(null)}
+      />
 
-      {/* Delete All Fixtures Modal */}
-      {isDeleteAllModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card max-w-md w-full p-6 rounded-2xl text-center space-y-4 border border-rose-500/30">
-            <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto" />
-            <div>
-              <h3 className="text-xl font-extrabold text-white">Delete All Fixtures?</h3>
-              <p className="text-xs text-rose-300 mt-2">
-                WARNING: This will permanently delete <strong>ALL</strong> fixtures and recorded scores. This action cannot be undone.
-              </p>
-            </div>
-            <div className="text-left space-y-1.5">
-              <label className="text-xs font-medium text-slate-300">
-                Type <span className="font-mono text-rose-400 font-bold">DELETE</span> to confirm:
-              </label>
-              <input
-                type="text"
-                value={deleteAllInput}
-                onChange={(e) => setDeleteAllInput(e.target.value)}
-                placeholder="DELETE"
-                className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-rose-500/50 text-white text-xs font-mono focus:outline-none focus:border-rose-500"
-              />
-            </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsDeleteAllModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deleteAllInput !== 'DELETE' || isDeletingAll}
-                onClick={handleDeleteAllFixtures}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition"
-              >
-                {isDeletingAll ? 'Deleting...' : 'Permanently Delete All'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete All Brackets Modal */}
-      {isDeleteBracketModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card max-w-md w-full p-6 rounded-2xl text-center space-y-4 border border-amber-500/30">
-            <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto" />
-            <div>
-              <h3 className="text-xl font-extrabold text-white">Clear Tournament Bracket?</h3>
-              <p className="text-xs text-amber-300 mt-2">
-                WARNING: This will clear <strong>ALL</strong> generated bracket matches. This action cannot be undone.
-              </p>
-            </div>
-            <div className="text-left space-y-1.5">
-              <label className="text-xs font-medium text-slate-300">
-                Type <span className="font-mono text-amber-400 font-bold">DELETE</span> to confirm:
-              </label>
-              <input
-                type="text"
-                value={deleteBracketInput}
-                onChange={(e) => setDeleteBracketInput(e.target.value)}
-                placeholder="DELETE"
-                className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-amber-500/50 text-white text-xs font-mono focus:outline-none focus:border-amber-500"
-              />
-            </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsDeleteBracketModalOpen(false)}
-                className="px-4 py-2 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deleteBracketInput !== 'DELETE' || isDeletingBracket}
-                onClick={handleDeleteAllBrackets}
-                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold transition"
-              >
-                {isDeletingBracket ? 'Clearing...' : 'Clear Bracket'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete All Fixtures Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isDeleteAllModalOpen}
+        title="Clear All Fixtures?"
+        message={`This will permanently remove all ${matches.length} fixture(s) and reset group standings. This action cannot be undone.`}
+        confirmText="Clear All Fixtures"
+        isDanger={true}
+        isLoading={isDeletingAll}
+        onConfirm={handleDeleteAllFixtures}
+        onCancel={() => setIsDeleteAllModalOpen(false)}
+      />
     </AdminLayout>
   );
 };
