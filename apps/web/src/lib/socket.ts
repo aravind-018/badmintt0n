@@ -36,7 +36,11 @@ export function getSocket(): Socket {
     });
 
     socket.on('connect_error', (error) => {
-      console.warn('[Socket.IO] Connection error:', error.message);
+      if (import.meta.env.PROD) {
+        console.debug('[Socket.IO] Real-time socket unavailable, using REST fallback');
+      } else {
+        console.warn('[Socket.IO] Connection error:', error.message);
+      }
     });
 
     socket.on('reconnect', (attempt) => {

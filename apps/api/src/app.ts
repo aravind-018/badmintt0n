@@ -32,6 +32,11 @@ app.use(express.urlencoded({ extended: true }));
 // Express routes
 app.use(router);
 
+// Socket.io fallback route for serverless deployments (Vercel)
+app.use('/socket.io', (_req, res) => {
+  res.status(200).json({ status: 'serverless_mode', message: 'Real-time Socket.IO unavailable in serverless mode; REST fallback active.' });
+});
+
 // Global Error Handler
 app.use(errorHandler);
 

@@ -133,61 +133,89 @@ export function initSocket(server: HttpServer): SocketServer {
 // ─────────────────────────────────────────────────────────────
 
 async function getMatchSnapshot(matchId: string) {
-  const match = await prisma.match.findUnique({
-    where: { id: matchId },
-    include: {
-      category: true,
-      court: true,
-      games: true,
-      events: { orderBy: { createdAt: 'asc' } },
-    },
-  });
+  try {
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      include: {
+        category: true,
+        court: true,
+        games: true,
+        events: { orderBy: { createdAt: 'asc' } },
+      },
+    });
 
-  if (!match) return null;
+    if (!match) return null;
 
-  const scoringEvents: MatchEvent[] = match.events.map(
-    (e: { id: string; matchId: string; gameNumber: number; type: string; createdAt: Date; scorerId: string }) => ({
+    const targetPoints = (match.currentGameState as any)?.targetPoints || 21;
+    const metadata = {
+      isDoubles: match.category?.type?.includes('DOUBLES'),
+      sideAName: match.sideAName,
+      sideBName: match.sideBName,
+      initialServerName: (match.currentGameState as any)?.initialServerName,
+      initialServingSide: (match.currentGameState as any)?.initialServingSide,
+    };
+
+    const scoringEvents: MatchEvent[] = (match.events || []).map((e) => ({
       id: e.id,
       matchId: e.matchId,
-      gameNumber: e.gameNumber,
+      gameNumber: e.gameNumber || 1,
       type: e.type as MatchEventType,
-      timestamp: e.createdAt.toISOString(),
-      createdBy: e.scorerId,
-    })
-  );
+      timestamp: e.createdAt ? e.createdAt.toISOString() : new Date().toISOString(),
+      createdBy: e.scorerId || 'SYSTEM',
+    }));
 
-  const state = replayMatchEvents(scoringEvents);
-  return { match, state };
+    const state = replayMatchEvents(scoringEvents, targetPoints, metadata);
+    return { match, state };
+  } catch (err) {
+    console.error(`[getMatchSnapshot Error] Match ID ${matchId}:`, err);
+    return null;
+  }
 }
 
 export async function getActiveLiveData() {
-  const matches = await prisma.match.findMany({
-    where: {
-      status: { in: ['LIVE', 'PAUSED'] },
-    },
-    include: {
-      category: true,
-      court: true,
-      games: true,
-      events: { orderBy: { createdAt: 'asc' } },
-    },
-    orderBy: { updatedAt: 'desc' },
-  });
+  try {
+    const matches = await prisma.match.findMany({
+      where: {
+        status: { in: ['LIVE', 'PAUSED'] },
+      },
+      include: {
+        category: true,
+        court: true,
+        games: true,
+        events: { orderBy: { createdAt: 'asc' } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
 
-  return matches.map((match) => {
-    const scoringEvents: MatchEvent[] = match.events.map(
-      (e: { id: string; matchId: string; gameNumber: number; type: string; createdAt: Date; scorerId: string }) => ({
-        id: e.id,
-        matchId: e.matchId,
-        gameNumber: e.gameNumber,
-        type: e.type as MatchEventType,
-        timestamp: e.createdAt.toISOString(),
-        createdBy: e.scorerId,
-      })
-    );
-    const state = replayMatchEvents(scoringEvents);
-    return { match, state };
-  });
+    return matches.map((match) => {
+      try {
+        const targetPoints = (match.currentGameState as any)?.targetPoints || 21;
+        const metadata = {
+          isDoubles: match.category?.type?.includes('DOUBLES'),
+          sideAName: match.sideAName,
+          sideBName: match.sideBName,
+          initialServerName: (match.currentGameState as any)?.initialServerName,
+          initialServingSide: (match.currentGameState as any)?.initialServingSide,
+        };
+        const scoringEvents: MatchEvent[] = (match.events || []).map((e) => ({
+          id: e.id,
+          matchId: e.matchId,
+          gameNumber: e.gameNumber || 1,
+          type: e.type as MatchEventType,
+          timestamp: e.createdAt ? e.createdAt.toISOString() : new Date().toISOString(),
+          createdBy: e.scorerId || 'SYSTEM',
+        }));
+        const state = replayMatchEvents(scoringEvents, targetPoints, metadata);
+        return { match, state };
+      } catch (err) {
+        console.error(`[getActiveLiveData Error] Match ID ${match.id}:`, err);
+        return { match, state: null };
+      }
+    });
+  } catch (err) {
+    console.error('[getActiveLiveData Top Error]:', err);
+    return [];
+  }
 }
 
 export function getIO(): SocketServer {

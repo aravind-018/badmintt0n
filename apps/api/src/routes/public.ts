@@ -99,12 +99,28 @@ publicRouter.get('/home', async (_req, res) => {
 
     // Replay events for active matches to calculate live scoring state
     const activeMatches = activeMatchRows.map((match) => {
-      const scoringEvents = (match.events || []).map(toScoringEvent);
-      const computedState = replayMatchEvents(scoringEvents);
-      return {
-        ...match,
-        computedState,
-      };
+      try {
+        const targetPoints = (match.currentGameState as any)?.targetPoints || 21;
+        const metadata = {
+          isDoubles: match.category?.type?.includes('DOUBLES'),
+          sideAName: match.sideAName,
+          sideBName: match.sideBName,
+          initialServerName: (match.currentGameState as any)?.initialServerName,
+          initialServingSide: (match.currentGameState as any)?.initialServingSide,
+        };
+        const scoringEvents = (match.events || []).map(toScoringEvent);
+        const computedState = replayMatchEvents(scoringEvents, targetPoints, metadata);
+        return {
+          ...match,
+          computedState,
+        };
+      } catch (err) {
+        console.error(`[Public Home Error] Match ID ${match.id}:`, err);
+        return {
+          ...match,
+          computedState: null,
+        };
+      }
     });
 
     const liveCourtsCount = activeMatches.length;
