@@ -19,7 +19,7 @@ export const MatchDetailPage: React.FC = () => {
         if (!r.ok) throw new Error('Match not found');
         return r.json();
       })
-      .then((data) => setMatch(data))
+      .then((data) => setMatch(data.match || data))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [id]);
