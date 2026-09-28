@@ -1,10 +1,8 @@
-# 🏸 Badminton Live — Real-Time Tournament Management & BWF Scoring Platform
+Badminton Live — Real-Time Tournament Management & BWF Scoring Platform
 
 A complete, production-ready full-stack badminton tournament system featuring BWF-compliant live scoring, WebSockets real-time broadcasts, visual knockout & round-robin brackets, public tournament views, administrative control console, security audit logging, derived statistics, dynamic QR codes, and Docker production deployment.
 
----
-
-## 📋 Table of Contents
+Table of Contents
 1. [Requirements](#1-requirements)
 2. [Local Setup](#2-local-setup)
 3. [Installing Dependencies](#3-installing-dependencies)
@@ -102,13 +100,6 @@ npx tsx packages/database/src/seed.ts
 
 ---
 
-## 8. Test Accounts
-| Role | Email | Password | Access Scope |
-| :--- | :--- | :--- | :--- |
-| **SUPER_ADMIN** | `admin@badminton.live` | `AdminPassword123!` | Full System & Security Control |
-| **TOURNAMENT_ADMIN** | `tournament@badminton.live` | `AdminPassword123!` | Tournament, Fixture & Court Admin |
-| **SCORER** | `scorer@badminton.live` | `ScorerPassword123!` | Live Scorer Console Access |
-| **VIEWER** | N/A (Public) | Public Access | Read-Only Scores & WebSockets |
 
 ---
 
