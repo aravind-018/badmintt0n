@@ -504,49 +504,49 @@ export const AdminFixturesPage: React.FC = () => {
         </div>
 
         {/* View Controls & Category Bar */}
-        <div className="glass-card p-4 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-slate-700/60">
+        <div className="glass-card p-3 sm:p-4 rounded-2xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 border border-slate-700/60">
           {/* Stage Tabs */}
-          <div className="flex items-center gap-2 bg-dark-800 p-1.5 rounded-xl border border-slate-700">
+          <div className="flex items-center gap-1.5 sm:gap-2 bg-dark-800 p-1.5 rounded-xl border border-slate-700 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => setStageTab('KNOCKOUT')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
                 stageTab === 'KNOCKOUT' ? 'bg-brand-600 text-white shadow' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Layers className="w-3.5 h-3.5" /> Knockout Bracket
+              <Layers className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Knockout Bracket</span>
             </button>
             <button
               type="button"
               onClick={() => setStageTab('GROUP_STAGE')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
                 stageTab === 'GROUP_STAGE' ? 'bg-brand-600 text-white shadow' : 'text-slate-400 hover:text-white'
               }`}
             >
-              <Shield className="w-3.5 h-3.5" /> Group Stage
+              <Shield className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Group Stage</span>
             </button>
           </div>
 
           {/* Bracket Tree vs List View Toggle */}
           {stageTab === 'KNOCKOUT' && (
-            <div className="flex items-center gap-2 bg-dark-800 p-1.5 rounded-xl border border-slate-700">
+            <div className="flex items-center gap-1.5 sm:gap-2 bg-dark-800 p-1.5 rounded-xl border border-slate-700 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setViewMode('BRACKET_TREE')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
                   viewMode === 'BRACKET_TREE' ? 'bg-accent-amber text-dark-900 shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <Layers className="w-3.5 h-3.5" /> Bracket Tree
+                <Layers className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Bracket Tree</span>
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('LIST_VIEW')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
                   viewMode === 'LIST_VIEW' ? 'bg-accent-amber text-dark-900 shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <List className="w-3.5 h-3.5" /> List View
+                <List className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">List View</span>
               </button>
             </div>
           )}
@@ -631,12 +631,12 @@ export const AdminFixturesPage: React.FC = () => {
                   key={m.id}
                   className="glass-card glass-card-hover p-4 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-l-4 border-l-brand-500"
                 >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-[11px]">
+                  <div className="space-y-1 w-full md:w-auto">
+                    <div className="flex items-center gap-2 text-[11px] flex-wrap">
                       <span className="font-bold text-brand-400 uppercase">{m.round || 'Match'}</span>
-                      <span className="text-slate-500">â€¢</span>
+                      <span className="text-slate-500">•</span>
                       <span className="text-accent-cyan font-semibold">{m.category?.type?.replace('_', ' ') || 'Singles'}</span>
-                      <span className="text-slate-500">â€¢</span>
+                      <span className="text-slate-500">•</span>
                       <span
                         className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
                           m.status === 'COMPLETED'
@@ -650,30 +650,30 @@ export const AdminFixturesPage: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-4 text-base font-bold text-white py-1">
-                      <span className={m.winnerId === m.sideAId ? 'text-brand-400 font-extrabold' : ''}>
+                    <div className="flex items-center gap-3 sm:gap-4 text-sm sm:text-base font-bold text-white py-1 flex-wrap">
+                      <span className={`break-words ${m.winnerId === m.sideAId ? 'text-brand-400 font-extrabold' : ''}`}>
                         {formatBracketParticipant(m.sideAId, m.sideAName).displayName}
                       </span>
                       <span className="text-slate-500 text-xs font-normal">vs</span>
-                      <span className={m.winnerId === m.sideBId ? 'text-brand-400 font-extrabold' : ''}>
+                      <span className={`break-words ${m.winnerId === m.sideBId ? 'text-brand-400 font-extrabold' : ''}`}>
                         {formatBracketParticipant(m.sideBId, m.sideBName).displayName}
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-6 text-xs text-slate-400 w-full md:w-auto justify-between md:justify-end">
-                    <div className="space-y-1 text-right">
-                      <div className="flex items-center gap-1.5 justify-end">
-                        <Clock className="w-3.5 h-3.5 text-accent-amber" />
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-6 text-xs text-slate-400 w-full md:w-auto justify-between md:justify-end border-t border-slate-800 md:border-t-0 pt-3 md:pt-0">
+                    <div className="space-y-1 text-left sm:text-right">
+                      <div className="flex items-center gap-1.5 justify-start sm:justify-end">
+                        <Clock className="w-3.5 h-3.5 text-accent-amber shrink-0" />
                         <span>{m.scheduledAt ? new Date(m.scheduledAt).toLocaleString() : 'TBD'}</span>
                       </div>
-                      <div className="flex items-center gap-1.5 justify-end">
-                        <MapPin className="w-3.5 h-3.5 text-slate-500" />
+                      <div className="flex items-center gap-1.5 justify-start sm:justify-end">
+                        <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                         <span>{m.court?.name || 'Court Unassigned'}</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
                       <Link
                         to={`/scorer/match/${m.id}`}
                         className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-bold text-xs border border-amber-500/30 transition flex items-center gap-1"

@@ -51,7 +51,7 @@ export const PlayersPage: React.FC = () => {
             placeholder="Search by player or team name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ minWidth: 260 }}
+            style={{ width: '100%', maxWidth: 320 }}
           />
 
           <select

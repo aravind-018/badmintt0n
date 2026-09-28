@@ -53,31 +53,31 @@ export const PublicFixturesPage: React.FC = () => {
     <div className="min-h-screen bg-dark-900 text-slate-100 flex flex-col">
       {/* Navbar */}
       <header className="border-b border-slate-800 bg-dark-800/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[64px] py-2 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Link to="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-accent-emerald flex items-center justify-center glow-green">
-                <Trophy className="w-6 h-6 text-white" />
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-accent-emerald flex items-center justify-center glow-green shrink-0">
+                <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
-              <div>
-                <h1 className="text-xl font-bold font-sans tracking-tight text-white flex items-center gap-2">
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-xl font-bold font-sans tracking-tight text-white flex items-center gap-2 truncate">
                   Badminton Live
                 </h1>
-                <p className="text-xs text-slate-400">Public Match Schedule & Fixtures</p>
+                <p className="text-[11px] sm:text-xs text-slate-400 truncate">Public Match Schedule & Fixtures</p>
               </div>
             </Link>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
               to="/bracket"
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-accent-amber/20 hover:bg-accent-amber/30 border border-accent-amber/40 text-accent-amber text-xs font-bold transition"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-xl bg-accent-amber/20 hover:bg-accent-amber/30 border border-accent-amber/40 text-accent-amber text-xs font-bold transition"
             >
-              <Layers className="w-4 h-4" /> Visual Bracket View
+              <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden xs:inline">Visual Bracket</span><span className="xs:hidden">Bracket</span>
             </Link>
             <Link
               to="/login"
-              className="px-3.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold transition"
+              className="px-3 sm:px-3.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold transition"
             >
               Sign In
             </Link>

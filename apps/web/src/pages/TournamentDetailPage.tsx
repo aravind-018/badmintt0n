@@ -91,49 +91,49 @@ export const TournamentDetailPage: React.FC = () => {
         </div>
 
         {/* Overview Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-          <div className="pub-card" style={{ padding: '1.25rem', textAlign: 'center' }}>
-            <span style={{ fontSize: '1.8rem' }}>🎯</span>
-            <h3 style={{ margin: '0.5rem 0 0.2rem', fontSize: '1.5rem', fontWeight: 800, color: '#fff' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.85rem', marginBottom: '2rem' }}>
+          <div className="pub-card" style={{ padding: '1rem', textAlign: 'center' }}>
+            <span style={{ fontSize: '1.6rem' }}>🎯</span>
+            <h3 style={{ margin: '0.4rem 0 0.1rem', fontSize: '1.35rem', fontWeight: 800, color: '#fff' }}>
               {categories.length}
             </h3>
-            <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.45)' }}>Categories</span>
+            <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)' }}>Categories</span>
           </div>
 
-          <div className="pub-card" style={{ padding: '1.25rem', textAlign: 'center' }}>
-            <span style={{ fontSize: '1.8rem' }}>🏸</span>
-            <h3 style={{ margin: '0.5rem 0 0.2rem', fontSize: '1.5rem', fontWeight: 800, color: '#fff' }}>
+          <div className="pub-card" style={{ padding: '1rem', textAlign: 'center' }}>
+            <span style={{ fontSize: '1.6rem' }}>🏸</span>
+            <h3 style={{ margin: '0.4rem 0 0.1rem', fontSize: '1.35rem', fontWeight: 800, color: '#fff' }}>
               {matches.length}
             </h3>
-            <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.45)' }}>Total Matches</span>
+            <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)' }}>Total Matches</span>
           </div>
 
-          <div className="pub-card" style={{ padding: '1.25rem', textAlign: 'center' }}>
-            <span style={{ fontSize: '1.8rem' }}>🏟️</span>
-            <h3 style={{ margin: '0.5rem 0 0.2rem', fontSize: '1.5rem', fontWeight: 800, color: '#fff' }}>
+          <div className="pub-card" style={{ padding: '1rem', textAlign: 'center' }}>
+            <span style={{ fontSize: '1.6rem' }}>🏟️</span>
+            <h3 style={{ margin: '0.4rem 0 0.1rem', fontSize: '1.35rem', fontWeight: 800, color: '#fff' }}>
               {tournament.numberOfCourts || 4}
             </h3>
-            <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.45)' }}>Courts</span>
+            <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)' }}>Courts</span>
           </div>
         </div>
 
         {/* Quick Links / Actions */}
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
-          <Link to={`/fixtures?tournamentId=${tournament.id}`} className="pub-filter-input" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
+          <Link to={`/fixtures?tournamentId=${tournament.id}`} className="pub-filter-input" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
             📅 View Fixtures
           </Link>
-          <Link to={`/standings?tournamentId=${tournament.id}`} className="pub-filter-input" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Link to={`/standings?tournamentId=${tournament.id}`} className="pub-filter-input" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
             📊 View Standings
           </Link>
-          <Link to={`/bracket?tournamentId=${tournament.id}`} className="pub-filter-input" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Link to={`/bracket?tournamentId=${tournament.id}`} className="pub-filter-input" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
             🌳 View Bracket
           </Link>
           <button
             onClick={() => setIsQrOpen(true)}
             className="pub-filter-input"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: 'rgba(99,102,241,0.2)', borderColor: 'rgba(99,102,241,0.4)', color: '#a5b4fc', fontWeight: 600 }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: 'rgba(99,102,241,0.2)', borderColor: 'rgba(99,102,241,0.4)', color: '#a5b4fc', fontWeight: 600, fontSize: '0.85rem' }}
           >
-            📱 Tournament QR Code
+            📱 Match QR Code
           </button>
         </div>
 

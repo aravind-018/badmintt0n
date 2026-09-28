@@ -175,12 +175,12 @@ export const AdminCategoriesPage: React.FC = () => {
         </div>
 
         {/* Tournament Filter */}
-        <div className="glass-card p-4 rounded-2xl flex items-center gap-3 text-xs">
-          <span className="text-slate-300 font-semibold">Filter by Tournament:</span>
+        <div className="glass-card p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 text-xs">
+          <span className="text-slate-300 font-semibold shrink-0">Filter by Tournament:</span>
           <select
             value={selectedTournament}
             onChange={(e) => setSelectedTournament(e.target.value)}
-            className="py-2 px-3 rounded-xl bg-dark-800 border border-slate-700/80 text-white focus:outline-none focus:border-brand-500 flex-1 max-w-md"
+            className="py-2 px-3 rounded-xl bg-dark-800 border border-slate-700/80 text-white focus:outline-none focus:border-brand-500 w-full sm:max-w-md"
           >
             <option value="">All Tournaments</option>
             {tournaments.map((t) => (

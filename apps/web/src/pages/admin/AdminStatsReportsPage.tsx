@@ -51,23 +51,23 @@ export const AdminStatsReportsPage: React.FC = () => {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[64px] py-2.5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Link to="/admin" className="text-slate-400 hover:text-white transition text-sm">
+            <Link to="/admin" className="text-slate-400 hover:text-white transition text-xs sm:text-sm shrink-0">
               ← Dashboard
             </Link>
-            <h1 className="text-xl font-extrabold text-white flex items-center gap-2">
-              📊 Tournament Analytics & Organizer Reports
+            <h1 className="text-base sm:text-xl font-extrabold text-white flex items-center gap-2 truncate">
+              📊 Analytics <span className="hidden sm:inline">& Organizer Reports</span>
             </h1>
           </div>
-          <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+          <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold shrink-0">
             <button
               onClick={() => setActiveTab('stats')}
               className={`px-3 py-1.5 rounded-lg transition ${
                 activeTab === 'stats' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Tournament Stats
+              Stats
             </button>
             <button
               onClick={() => setActiveTab('reports')}
@@ -75,14 +75,14 @@ export const AdminStatsReportsPage: React.FC = () => {
                 activeTab === 'reports' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Organizer Reports
+              Reports
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full space-y-6 sm:space-y-8">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -91,29 +91,29 @@ export const AdminStatsReportsPage: React.FC = () => {
         ) : activeTab === 'stats' ? (
           <>
             {/* Top Derived Metric Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 text-center space-y-1">
-                <span className="text-2xl">🏸</span>
-                <div className="text-2xl font-extrabold text-white">{stats?.matchesTotal || 0}</div>
-                <div className="text-xs text-slate-400 font-medium">Total Fixtures Scheduled</div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3.5 sm:p-5 text-center space-y-1">
+                <span className="text-xl sm:text-2xl">🏸</span>
+                <div className="text-xl sm:text-2xl font-extrabold text-white">{stats?.matchesTotal || 0}</div>
+                <div className="text-[11px] sm:text-xs text-slate-400 font-medium">Fixtures Scheduled</div>
               </div>
 
-              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 text-center space-y-1">
-                <span className="text-2xl">🏆</span>
-                <div className="text-2xl font-extrabold text-emerald-400">{stats?.matchesCompleted || 0}</div>
-                <div className="text-xs text-slate-400 font-medium">Matches Completed</div>
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3.5 sm:p-5 text-center space-y-1">
+                <span className="text-xl sm:text-2xl">🏆</span>
+                <div className="text-xl sm:text-2xl font-extrabold text-emerald-400">{stats?.matchesCompleted || 0}</div>
+                <div className="text-[11px] sm:text-xs text-slate-400 font-medium">Completed</div>
               </div>
 
-              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 text-center space-y-1">
-                <span className="text-2xl">⚡</span>
-                <div className="text-2xl font-extrabold text-amber-400">{stats?.gamesTotal || 0}</div>
-                <div className="text-xs text-slate-400 font-medium">Total Games Played</div>
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3.5 sm:p-5 text-center space-y-1">
+                <span className="text-xl sm:text-2xl">⚡</span>
+                <div className="text-xl sm:text-2xl font-extrabold text-amber-400">{stats?.gamesTotal || 0}</div>
+                <div className="text-[11px] sm:text-xs text-slate-400 font-medium">Games Played</div>
               </div>
 
-              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 text-center space-y-1">
-                <span className="text-2xl">🎯</span>
-                <div className="text-2xl font-extrabold text-indigo-400">{stats?.totalPointsScored || 0}</div>
-                <div className="text-xs text-slate-400 font-medium">Points Scored Total</div>
+              <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3.5 sm:p-5 text-center space-y-1">
+                <span className="text-xl sm:text-2xl">🎯</span>
+                <div className="text-xl sm:text-2xl font-extrabold text-indigo-400">{stats?.totalPointsScored || 0}</div>
+                <div className="text-[11px] sm:text-xs text-slate-400 font-medium">Points Scored</div>
               </div>
             </div>
 

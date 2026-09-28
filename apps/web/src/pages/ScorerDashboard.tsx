@@ -31,29 +31,29 @@ export const ScorerDashboard: React.FC = () => {
     <div className="min-h-screen bg-dark-900 text-slate-100 flex flex-col">
       {/* Header */}
       <header className="border-b border-slate-800 bg-dark-800/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[64px] py-2.5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-accent-amber to-orange-500 flex items-center justify-center glow-cyan">
-              <Radio className="w-6 h-6 text-white" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-accent-amber to-orange-500 flex items-center justify-center glow-cyan shrink-0">
+              <Radio className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold font-sans tracking-tight text-white flex items-center gap-2">
-                Scorer Console <span className="text-xs px-2.5 py-0.5 rounded-full bg-accent-amber/20 text-accent-amber border border-accent-amber/30 font-semibold">{user?.role}</span>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-xl font-bold font-sans tracking-tight text-white flex items-center gap-2 truncate">
+                Scorer Console <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-accent-amber/20 text-accent-amber border border-accent-amber/30 font-semibold shrink-0">{user?.role}</span>
               </h1>
-              <p className="text-xs text-slate-400">Court Live Scoring Terminal</p>
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate">Court Live Scoring Terminal</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <div className="text-right hidden sm:block">
               <div className="text-sm font-semibold text-white">{user?.name}</div>
               <div className="text-xs text-slate-400">{user?.email}</div>
             </div>
             <button
               onClick={logout}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 border border-slate-700 text-xs font-semibold text-slate-300 transition"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 border border-slate-700 text-xs font-semibold text-slate-300 transition"
             >
-              <LogOut className="w-4 h-4" /> Logout
+              <LogOut className="w-4 h-4" /> <span>Logout</span>
             </button>
           </div>
         </div>

@@ -67,25 +67,25 @@ export const AdminAuditLogsPage: React.FC = () => {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[64px] py-2.5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Link to="/admin" className="text-slate-400 hover:text-white transition text-sm">
+            <Link to="/admin" className="text-slate-400 hover:text-white transition text-xs sm:text-sm shrink-0">
               ← Dashboard
             </Link>
-            <h1 className="text-xl font-extrabold text-white flex items-center gap-2">
+            <h1 className="text-base sm:text-xl font-extrabold text-white flex items-center gap-2 truncate">
               📋 System Audit Logs
             </h1>
           </div>
-          <span className="text-xs text-slate-400 font-mono">
-            {total} Total Security & Scoring Events Recorded
+          <span className="text-[11px] sm:text-xs text-slate-400 font-mono">
+            {total} Events Recorded
           </span>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full space-y-6">
         {/* Filter Bar */}
-        <div className="flex flex-wrap gap-4 items-center bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 items-stretch sm:items-center bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
           <input
             type="text"
             placeholder="Search by user or entity..."
@@ -94,7 +94,7 @@ export const AdminAuditLogsPage: React.FC = () => {
               setSearch(e.target.value);
               setPage(1);
             }}
-            className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 min-w-[240px]"
+            className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-indigo-500 w-full sm:w-auto sm:min-w-[240px]"
           />
 
           <select
@@ -103,7 +103,7 @@ export const AdminAuditLogsPage: React.FC = () => {
               setActionFilter(e.target.value);
               setPage(1);
             }}
-            className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+            className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white focus:outline-none focus:border-indigo-500 cursor-pointer w-full sm:w-auto"
           >
             <option value="">All Action Types</option>
             <option value="LOGIN">LOGIN</option>

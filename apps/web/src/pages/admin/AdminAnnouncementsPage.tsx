@@ -142,18 +142,18 @@ export const AdminAnnouncementsPage: React.FC = () => {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       {/* Admin Header */}
       <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[64px] py-2.5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Link to="/admin" className="text-slate-400 hover:text-white transition text-sm">
+            <Link to="/admin" className="text-slate-400 hover:text-white transition text-xs sm:text-sm shrink-0">
               ← Dashboard
             </Link>
-            <h1 className="text-xl font-extrabold text-white flex items-center gap-2">
-              📢 Announcements Management
+            <h1 className="text-base sm:text-xl font-extrabold text-white flex items-center gap-2 truncate">
+              📢 Announcements <span className="hidden sm:inline">Management</span>
             </h1>
           </div>
           <button
             onClick={openCreateModal}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-indigo-600/20 transition flex items-center gap-2"
+            className="px-3.5 sm:px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-indigo-600/20 transition flex items-center gap-1.5 shrink-0"
           >
             + Create Announcement
           </button>
@@ -161,7 +161,7 @@ export const AdminAnnouncementsPage: React.FC = () => {
       </header>
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />

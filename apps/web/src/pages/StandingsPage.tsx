@@ -151,6 +151,7 @@ export const StandingsPage: React.FC = () => {
           width: 100%;
           border-collapse: collapse;
           font-size: 0.9rem;
+          min-width: 580px;
         }
         .standings-table th {
           background: rgba(255,255,255,0.06);
@@ -161,15 +162,24 @@ export const StandingsPage: React.FC = () => {
           letter-spacing: 0.05em;
           padding: 0.85rem 1rem;
           border-bottom: 1px solid rgba(255,255,255,0.08);
+          white-space: nowrap;
         }
         .standings-table td {
           padding: 0.9rem 1rem;
           border-bottom: 1px solid rgba(255,255,255,0.05);
           color: rgba(255,255,255,0.8);
+          white-space: nowrap;
         }
         .standings-table tr:last-child td { border-bottom: none; }
         .standings-table tr:hover td { background: rgba(255,255,255,0.03); }
         .standings-table tr.leader td { background: rgba(251,191,36,0.05); }
+
+        @media (max-width: 640px) {
+          .standings-table th, .standings-table td {
+            padding: 0.65rem 0.75rem;
+            font-size: 0.825rem;
+          }
+        }
       `}</style>
     </PublicLayout>
   );
