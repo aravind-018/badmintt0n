@@ -6,6 +6,8 @@ import { useToast } from '../../context/ToastContext';
 import { ConfirmModal } from '../../components/ConfirmModal';
 import { VisualBracketTree, formatBracketParticipant } from '../../components/VisualBracketTree';
 import { GroupStageView } from '../../components/GroupStageView';
+import { QualifiedTeamsView } from '../../components/QualifiedTeamsView';
+import { validateGroupKnockoutConfig, isPowerOfTwo, getKnockoutRoundName } from '@badminton-live/shared';
 import {
   Calendar,
   Plus,
@@ -28,6 +30,8 @@ import {
   ChevronRight,
   CheckCircle,
   UserX,
+  Award,
+  Sparkles,
 } from 'lucide-react';
 
 export const AdminFixturesPage: React.FC = () => {
@@ -47,7 +51,7 @@ export const AdminFixturesPage: React.FC = () => {
 
   // Navigation / View state
   const [viewMode, setViewMode] = useState<'BRACKET_TREE' | 'LIST_VIEW'>('BRACKET_TREE');
-  const [stageTab, setStageTab] = useState<'GROUP_STAGE' | 'KNOCKOUT'>('KNOCKOUT');
+  const [stageTab, setStageTab] = useState<'GROUP_STAGE' | 'KNOCKOUT' | 'QUALIFIED_TEAMS'>('KNOCKOUT');
 
   // Filters
   const [search, setSearch] = useState('');
@@ -65,6 +69,11 @@ export const AdminFixturesPage: React.FC = () => {
   const [eligibleParticipants, setEligibleParticipants] = useState<any[]>([]);
   const [excludedParticipants, setExcludedParticipants] = useState<any[]>([]);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
+
+  // Group Knockout Configuration Controls
+  const [numberOfGroupsInput, setNumberOfGroupsInput] = useState<number>(4);
+  const [qualifiersPerGroupInput, setQualifiersPerGroupInput] = useState<number>(2);
+
   const [generatorPreview, setGeneratorPreview] = useState<any | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -132,7 +141,6 @@ export const AdminFixturesPage: React.FC = () => {
       if (activeTournId && !tournamentId) setTournamentId(activeTournId);
       if (activeCatId && !categoryId) setCategoryId(activeCatId);
 
-      // Fetch group standings if tournament & category exist
       if (activeTournId && activeCatId) {
         fetchGroupStandings(activeTournId, activeCatId);
       }
@@ -300,6 +308,8 @@ export const AdminFixturesPage: React.FC = () => {
     setSelectedFormat('');
     setEligibleParticipants([]);
     setExcludedParticipants([]);
+    setNumberOfGroupsInput(4);
+    setQualifiersPerGroupInput(2);
     setGeneratorPreview(null);
     setConfirmGenerateChecked(false);
   };
@@ -318,8 +328,13 @@ export const AdminFixturesPage: React.FC = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        setEligibleParticipants(data.eligible || []);
+        const eligible = data.eligible || [];
+        setEligibleParticipants(eligible);
         setExcludedParticipants(data.excluded || []);
+        // Set smart default group count based on team count (e.g. 19 teams -> 4 groups)
+        const defaultGroups = Math.max(1, Math.ceil(eligible.length / 4));
+        setNumberOfGroupsInput(defaultGroups > 0 ? defaultGroups : 4);
+        setQualifiersPerGroupInput(2);
       } else {
         showToast(data.error || 'Failed to load participants', 'error');
         setGeneratorStep('CATEGORY');
@@ -341,7 +356,14 @@ export const AdminFixturesPage: React.FC = () => {
     await loadEligibleParticipants(wizardCategoryId);
   };
 
-  const loadPreviewForFormat = async (fmt: 'ROUND_ROBIN' | 'GROUP_STAGE' | 'KNOCKOUT') => {
+  const loadPreviewForFormat = async (
+    fmt: 'ROUND_ROBIN' | 'GROUP_STAGE' | 'KNOCKOUT',
+    customNumGroups?: number,
+    customQualifiers?: number
+  ) => {
+    const numGroups = customNumGroups !== undefined ? customNumGroups : numberOfGroupsInput;
+    const qualPerGroup = customQualifiers !== undefined ? customQualifiers : qualifiersPerGroupInput;
+
     setSelectedFormat(fmt);
     setGeneratorStep('PREVIEW');
     setIsPreviewLoading(true);
@@ -356,6 +378,8 @@ export const AdminFixturesPage: React.FC = () => {
           tournamentId,
           categoryId: wizardCategoryId,
           format: fmt === 'GROUP_STAGE' ? 'GROUP_KNOCKOUT' : fmt,
+          numberOfGroups: numGroups,
+          qualifiersPerGroup: qualPerGroup,
         }),
       });
       const data = await res.json();
@@ -373,25 +397,32 @@ export const AdminFixturesPage: React.FC = () => {
     }
   };
 
+  const handleApplySuggestion = (sug: { numberOfGroups: number; qualifiersPerGroup: number }) => {
+    setNumberOfGroupsInput(sug.numberOfGroups);
+    setQualifiersPerGroupInput(sug.qualifiersPerGroup);
+    loadPreviewForFormat('GROUP_STAGE', sug.numberOfGroups, sug.qualifiersPerGroup);
+  };
+
   const handleConfirmGenerateFixtures = async (confirmRegenerate = false) => {
     if (isGenerating) return;
 
     const apiFormat =
       selectedFormat === 'GROUP_STAGE' ? 'GROUP_KNOCKOUT' :
-      selectedFormat === 'ROUND_ROBIN' ? 'ROUND_ROBIN' :
-      selectedFormat === 'KNOCKOUT' ? 'KNOCKOUT' : 'KNOCKOUT';
-
-    if (apiFormat === 'GROUP_KNOCKOUT' && generatorPreview?.totalTeams < 6) {
-      showToast('Group Round Robin + Knockout requires at least 6 eligible teams.', 'error');
-      return;
-    }
+      selectedFormat === 'ROUND_ROBIN' ? 'ROUND_ROBIN' : 'KNOCKOUT';
 
     setIsGenerating(true);
     try {
       const res = await fetch('/api/v1/matches/generate-fixtures', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ tournamentId, categoryId: wizardCategoryId, confirmRegenerate, format: apiFormat }),
+        body: JSON.stringify({
+          tournamentId,
+          categoryId: wizardCategoryId,
+          confirmRegenerate,
+          format: apiFormat,
+          numberOfGroups: numberOfGroupsInput,
+          qualifiersPerGroup: qualifiersPerGroupInput,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -399,7 +430,6 @@ export const AdminFixturesPage: React.FC = () => {
       } else {
         showToast(data.message || 'Fixtures generated successfully!');
         setIsGeneratorModalOpen(false);
-        // Sync page category to the wizard's selected category
         if (wizardCategoryId && wizardCategoryId !== categoryId) setCategoryId(wizardCategoryId);
         fetchData();
       }
@@ -470,7 +500,7 @@ export const AdminFixturesPage: React.FC = () => {
               <Calendar className="w-6 h-6 text-brand-500" /> Fixture & Bracket Management
             </h2>
             <p className="text-slate-400 text-xs mt-1">
-              Automated Group Stage (max 3 per group) & Knockout Bracket generator
+              Production-ready Group Stage + Knockout Tournament System
             </p>
           </div>
 
@@ -524,6 +554,15 @@ export const AdminFixturesPage: React.FC = () => {
               }`}
             >
               <Shield className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Group Stage</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStageTab('QUALIFIED_TEAMS')}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                stageTab === 'QUALIFIED_TEAMS' ? 'bg-brand-600 text-white shadow' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Qualified Teams</span>
             </button>
           </div>
 
@@ -612,6 +651,8 @@ export const AdminFixturesPage: React.FC = () => {
           <div className="py-16 text-center text-slate-400 text-sm flex items-center justify-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-brand-500" /> Loading fixtures & standings...
           </div>
+        ) : stageTab === 'QUALIFIED_TEAMS' ? (
+          <QualifiedTeamsView groups={groupStandings} />
         ) : stageTab === 'GROUP_STAGE' ? (
           <GroupStageView groups={groupStandings} progress={groupProgress} />
         ) : viewMode === 'BRACKET_TREE' ? (
@@ -858,22 +899,22 @@ export const AdminFixturesPage: React.FC = () => {
         </div>
       )}
 
-      {/* â”€â”€ Fixture Generator Wizard â€” 4-step â”€â”€ */}
+      {/* ── Fixture Generator Wizard ── */}
       {isGeneratorModalOpen && (() => {
         const wizardCat = categories.find((c: any) => c.id === wizardCategoryId);
         const catLabel = wizardCat?.type?.replace(/_/g, ' ') || 'Unknown Category';
         const tournamentCats = categories.filter((c: any) => c.tournamentId === tournamentId);
         const stepTitles: Record<string, string> = {
-          CATEGORY: 'Step 1 â€” Select Category',
-          PARTICIPANTS: 'Step 2 â€” Eligible Participants',
-          FORMAT: 'Step 3 â€” Tournament Format',
-          PREVIEW: 'Step 4 â€” Preview & Confirm',
+          CATEGORY: 'Step 1 — Select Category',
+          PARTICIPANTS: 'Step 2 — Eligible Participants',
+          FORMAT: 'Step 3 — Tournament Format',
+          PREVIEW: 'Step 4 — Preview & Group Configuration',
         };
         const stepNum: Record<string, number> = { CATEGORY: 1, PARTICIPANTS: 2, FORMAT: 3, PREVIEW: 4 };
 
         return (
           <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="glass-card max-w-lg w-full p-6 rounded-2xl shadow-2xl border border-amber-500/30 max-h-[90vh] overflow-y-auto">
+            <div className="glass-card max-w-xl w-full p-6 rounded-2xl shadow-2xl border border-amber-500/30 max-h-[90vh] overflow-y-auto">
 
               {/* Modal header */}
               <div className="flex items-center justify-between mb-4">
@@ -902,7 +943,7 @@ export const AdminFixturesPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* â”€â”€ STEP 1: CATEGORY â”€â”€ */}
+              {/* ── STEP 1: CATEGORY ── */}
               {generatorStep === 'CATEGORY' && (
                 <div className="space-y-4">
                   <p className="text-slate-400 text-xs">Choose the event category for which fixtures will be generated. Only participants eligible for this category will be included.</p>
@@ -938,7 +979,7 @@ export const AdminFixturesPage: React.FC = () => {
                             <div className="flex-1 min-w-0">
                               <p className={`font-bold text-sm ${isSelected ? 'text-white' : 'text-slate-300'}`}>{catTypeLabel}</p>
                               <p className="text-slate-500 text-[11px] mt-0.5">
-                                {isDoubles ? 'Doubles â€” 2 players per team' : isSingles ? 'Singles â€” 1 player per entry' : 'Team event'}
+                                {isDoubles ? 'Doubles — 2 players per team' : isSingles ? 'Singles — 1 player per entry' : 'Team event'}
                               </p>
                             </div>
                             <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
@@ -965,12 +1006,12 @@ export const AdminFixturesPage: React.FC = () => {
                 </div>
               )}
 
-              {/* â”€â”€ STEP 2: PARTICIPANTS â”€â”€ */}
+              {/* ── STEP 2: PARTICIPANTS ── */}
               {generatorStep === 'PARTICIPANTS' && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-xs text-slate-400">
-                    <button type="button" onClick={() => setGeneratorStep('CATEGORY')} className="hover:text-white transition">â† Back</button>
-                    <span>Â·</span>
+                    <button type="button" onClick={() => setGeneratorStep('CATEGORY')} className="hover:text-white transition">← Back</button>
+                    <span>·</span>
                     <span className="text-white font-semibold">{catLabel}</span>
                   </div>
 
@@ -980,7 +1021,6 @@ export const AdminFixturesPage: React.FC = () => {
                     </div>
                   ) : (
                     <>
-                      {/* Eligible count banner */}
                       <div className={`p-3.5 rounded-xl border flex items-center justify-between ${
                         eligibleParticipants.length >= 2
                           ? 'bg-emerald-500/10 border-emerald-500/30'
@@ -1006,7 +1046,6 @@ export const AdminFixturesPage: React.FC = () => {
                         )}
                       </div>
 
-                      {/* Eligible list */}
                       {eligibleParticipants.length > 0 && (
                         <div className="space-y-1.5">
                           <h4 className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
@@ -1017,14 +1056,13 @@ export const AdminFixturesPage: React.FC = () => {
                               <div key={p.id} className="flex items-center gap-2 p-2 rounded-lg bg-dark-800 border border-emerald-500/15 text-xs">
                                 <span className="text-slate-500 font-mono w-5 shrink-0 text-right">{i + 1}.</span>
                                 <span className="text-white font-medium truncate flex-1">{p.name}</span>
-                                <span className="text-emerald-400 text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 shrink-0">âœ“</span>
+                                <span className="text-emerald-400 text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 shrink-0">✓</span>
                               </div>
                             ))}
                           </div>
                         </div>
                       )}
 
-                      {/* Excluded list */}
                       {excludedParticipants.length > 0 && (
                         <div className="space-y-1.5">
                           <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -1041,16 +1079,10 @@ export const AdminFixturesPage: React.FC = () => {
                         </div>
                       )}
 
-                      {eligibleParticipants.length === 0 && excludedParticipants.length === 0 && (
-                        <div className="p-4 rounded-xl bg-dark-800 border border-slate-700 text-center text-slate-400 text-xs">
-                          No teams or players found for this tournament. Add teams first.
-                        </div>
-                      )}
-
                       <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-800">
                         <button type="button" onClick={() => setGeneratorStep('CATEGORY')}
                           className="px-4 py-2.5 rounded-xl bg-dark-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs">
-                          â† Back
+                          ← Back
                         </button>
                         <button type="button" onClick={() => setGeneratorStep('FORMAT')} disabled={eligibleParticipants.length < 2}
                           className="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition">
@@ -1062,14 +1094,14 @@ export const AdminFixturesPage: React.FC = () => {
                 </div>
               )}
 
-              {/* â”€â”€ STEP 3: FORMAT â”€â”€ */}
+              {/* ── STEP 3: FORMAT ── */}
               {generatorStep === 'FORMAT' && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-xs text-slate-400">
-                    <button type="button" onClick={() => setGeneratorStep('PARTICIPANTS')} className="hover:text-white transition">â† Back</button>
-                    <span>Â·</span>
+                    <button type="button" onClick={() => setGeneratorStep('PARTICIPANTS')} className="hover:text-white transition">← Back</button>
+                    <span>·</span>
                     <span className="text-white font-semibold">{catLabel}</span>
-                    <span>Â·</span>
+                    <span>·</span>
                     <span className="text-emerald-400">{eligibleParticipants.length} eligible</span>
                   </div>
 
@@ -1089,14 +1121,35 @@ export const AdminFixturesPage: React.FC = () => {
                             <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-accent-cyan text-[10px] font-bold border border-cyan-500/30 uppercase">Bracket</span>
                           </div>
                           <p className="text-slate-400 text-xs mt-1 leading-relaxed">
-                            All eligible participants placed directly into a single-elimination bracket. Lose once and you're out. No groups created.
+                            All eligible participants placed directly into a single-elimination bracket. Lose once and you&apos;re out. No groups created.
                           </p>
                         </div>
                         <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-accent-cyan shrink-0 mt-3 transition" />
                       </div>
                     </button>
 
-                    {/* Option 2: Round Robin Only */}
+                    {/* Option 2: Group Round Robin + Knockout */}
+                    <button type="button"
+                      onClick={() => loadPreviewForFormat('GROUP_STAGE')}
+                      className="w-full text-left p-4 rounded-2xl bg-dark-800 border border-slate-700 hover:border-emerald-500/60 hover:bg-dark-700 transition group">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0 group-hover:bg-emerald-500/25 transition">
+                          <Shield className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-white text-sm">2. Group Stage + Knockout</span>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/30 uppercase">Groups + KO</span>
+                          </div>
+                          <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                            Participants split evenly into groups. Round robin within groups. Top N qualify for a power-of-2 knockout bracket.
+                          </p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-emerald-400 shrink-0 mt-3 transition" />
+                      </div>
+                    </button>
+
+                    {/* Option 3: Round Robin Only */}
                     <button type="button" onClick={() => loadPreviewForFormat('ROUND_ROBIN')}
                       className="w-full text-left p-4 rounded-2xl bg-dark-800 border border-slate-700 hover:border-brand-500/60 hover:bg-dark-700 transition group">
                       <div className="flex items-start gap-3">
@@ -1105,53 +1158,14 @@ export const AdminFixturesPage: React.FC = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-white text-sm">2. Round Robin Only</span>
+                            <span className="font-extrabold text-white text-sm">3. Round Robin Only</span>
                             <span className="px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 text-[10px] font-bold border border-brand-500/30 uppercase">League</span>
                           </div>
                           <p className="text-slate-400 text-xs mt-1 leading-relaxed">
-                            Every participant plays every other participant exactly once. No groups. No knockout. Final standings determine the winner.
-                            {' '}<span className="text-brand-400 font-medium">
-                              {eligibleParticipants.length} teams â†’ {Math.floor(eligibleParticipants.length * (eligibleParticipants.length - 1) / 2)} matches
-                            </span>
+                            Every participant plays every other participant. No knockout stage. League standings determine champion.
                           </p>
                         </div>
                         <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-brand-400 shrink-0 mt-3 transition" />
-                      </div>
-                    </button>
-
-                    {/* Option 3: Group Round Robin + Knockout */}
-                    <button type="button"
-                      onClick={() => eligibleParticipants.length >= 6 ? loadPreviewForFormat('GROUP_STAGE') : undefined}
-                      disabled={eligibleParticipants.length < 6}
-                      className={`w-full text-left p-4 rounded-2xl border transition group ${
-                        eligibleParticipants.length >= 6
-                          ? 'bg-dark-800 border-slate-700 hover:border-emerald-500/60 hover:bg-dark-700'
-                          : 'bg-dark-900 border-slate-800 opacity-60 cursor-not-allowed'
-                      }`}>
-                      <div className="flex items-start gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition ${
-                          eligibleParticipants.length >= 6
-                            ? 'bg-emerald-500/15 text-emerald-400 group-hover:bg-emerald-500/25'
-                            : 'bg-slate-800 text-slate-600'
-                        }`}>
-                          <Shield className="w-5 h-5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-extrabold text-white text-sm">3. Group Round Robin + Knockout</span>
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/30 uppercase">Groups + KO</span>
-                          </div>
-                          <p className="text-slate-400 text-xs mt-1 leading-relaxed">
-                            Participants split into groups (max 3/group). Round robin within each group. Top teams qualify for the knockout bracket.
-                            {eligibleParticipants.length < 6
-                              ? <span className="text-amber-400 font-semibold"> Requires â‰¥ 6 eligible participants ({eligibleParticipants.length} found).</span>
-                              : <span className="text-emerald-400 font-semibold"> {eligibleParticipants.length} eligible â†’ {Math.ceil(eligibleParticipants.length / 3)} groups.</span>
-                            }
-                          </p>
-                        </div>
-                        {eligibleParticipants.length >= 6 && (
-                          <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-emerald-400 shrink-0 mt-3 transition" />
-                        )}
                       </div>
                     </button>
                   </div>
@@ -1165,22 +1179,63 @@ export const AdminFixturesPage: React.FC = () => {
                 </div>
               )}
 
-              {/* â”€â”€ STEP 4: PREVIEW + CONFIRM â”€â”€ */}
+              {/* ── STEP 4: PREVIEW + CONFIG ── */}
               {generatorStep === 'PREVIEW' && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-xs text-slate-400">
-                    <button type="button" onClick={() => setGeneratorStep('FORMAT')} className="hover:text-white transition">â† Back</button>
-                    <span>Â·</span>
+                    <button type="button" onClick={() => setGeneratorStep('FORMAT')} className="hover:text-white transition">← Back</button>
+                    <span>·</span>
                     <span className="text-white font-semibold">{catLabel}</span>
-                    <span>Â·</span>
+                    <span>·</span>
                     <span className={`font-semibold ${
                       selectedFormat === 'ROUND_ROBIN' ? 'text-brand-400' :
                       selectedFormat === 'GROUP_STAGE' ? 'text-emerald-400' : 'text-accent-cyan'
                     }`}>
                       {selectedFormat === 'ROUND_ROBIN' ? 'Round Robin Only' :
-                       selectedFormat === 'GROUP_STAGE' ? 'Group Round Robin + Knockout' : 'Knockout Only'}
+                       selectedFormat === 'GROUP_STAGE' ? 'Group Stage + Knockout' : 'Knockout Only'}
                     </span>
                   </div>
+
+                  {/* Group Knockout Interactive Configuration Controls */}
+                  {selectedFormat === 'GROUP_STAGE' && (
+                    <div className="glass-card p-4 rounded-xl border border-slate-700 space-y-3 bg-dark-800/80">
+                      <h4 className="font-extrabold text-white text-xs flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-emerald-400" /> Group & Qualification Settings
+                      </h4>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <label className="block text-slate-300 font-semibold mb-1">Number of Groups</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max={eligibleParticipants.length}
+                            value={numberOfGroupsInput}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10) || 1;
+                              setNumberOfGroupsInput(val);
+                              loadPreviewForFormat('GROUP_STAGE', val, qualifiersPerGroupInput);
+                            }}
+                            className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-slate-700 text-white font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-300 font-semibold mb-1">Qualifiers Per Group</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="16"
+                            value={qualifiersPerGroupInput}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10) || 1;
+                              setQualifiersPerGroupInput(val);
+                              loadPreviewForFormat('GROUP_STAGE', numberOfGroupsInput, val);
+                            }}
+                            className="w-full px-3 py-2 rounded-xl bg-dark-900 border border-slate-700 text-white font-bold"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {isPreviewLoading ? (
                     <div className="py-12 flex items-center justify-center gap-2 text-slate-400 text-xs">
@@ -1189,119 +1244,135 @@ export const AdminFixturesPage: React.FC = () => {
                   ) : generatorPreview ? (
                     <div className="space-y-3 text-xs">
 
-                      {/* Format header badge */}
+                      {/* Status Banner */}
                       <div className={`p-3.5 rounded-xl border flex items-center justify-between ${
-                        selectedFormat === 'ROUND_ROBIN' ? 'bg-brand-500/10 border-brand-500/30' :
-                        selectedFormat === 'GROUP_STAGE' ? 'bg-emerald-500/10 border-emerald-500/30' :
-                        'bg-cyan-500/10 border-cyan-500/30'
+                        generatorPreview.isValid
+                          ? 'bg-emerald-500/10 border-emerald-500/30'
+                          : 'bg-rose-500/10 border-rose-500/30'
                       }`}>
                         <div className="flex items-center gap-2.5">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                            selectedFormat === 'ROUND_ROBIN' ? 'bg-brand-500/20 text-brand-400' :
-                            selectedFormat === 'GROUP_STAGE' ? 'bg-emerald-500/20 text-emerald-400' :
-                            'bg-cyan-500/20 text-accent-cyan'
+                            generatorPreview.isValid ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
                           }`}>
-                            {selectedFormat === 'ROUND_ROBIN' ? <List className="w-4 h-4" /> :
-                             selectedFormat === 'GROUP_STAGE' ? <Shield className="w-4 h-4" /> :
-                             <Layers className="w-4 h-4" />}
+                            {generatorPreview.isValid ? <CheckCircle2 className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
                           </div>
                           <div>
-                            <h4 className={`font-extrabold text-xs ${
-                              selectedFormat === 'ROUND_ROBIN' ? 'text-brand-400' :
-                              selectedFormat === 'GROUP_STAGE' ? 'text-emerald-400' : 'text-accent-cyan'
-                            }`}>
-                              {selectedFormat === 'ROUND_ROBIN' ? 'Round Robin Only' :
-                               selectedFormat === 'GROUP_STAGE' ? 'Group Round Robin + Knockout' : 'Knockout Only'}
+                            <h4 className={`font-extrabold text-xs ${generatorPreview.isValid ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {generatorPreview.isValid ? '✓ Valid Configuration' : '⚠ Invalid Configuration'}
                             </h4>
-                            <p className="text-slate-400 text-[11px]">{catLabel}</p>
+                            <p className="text-slate-300 text-[11px]">
+                              {generatorPreview.totalTeams} Teams · {generatorPreview.expectedQualified || 0} Knockout Qualifiers
+                            </p>
                           </div>
                         </div>
-                        <span className="px-2.5 py-1 rounded-full bg-dark-800 border border-slate-700 font-bold text-[10px] text-slate-300 uppercase">
-                          {generatorPreview.totalTeams} eligible
+                        <span className={`px-2.5 py-1 rounded-full border text-[10px] font-extrabold uppercase ${
+                          generatorPreview.isValid
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                            : 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                        }`}>
+                          {generatorPreview.isValid ? 'VALID' : 'INVALID'}
                         </span>
                       </div>
 
-                      {/* Summary card */}
+                      {/* Validation Error Box if Invalid */}
+                      {!generatorPreview.isValid && generatorPreview.validationError && (
+                        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs space-y-2">
+                          <div className="flex items-center gap-2 font-bold text-rose-400">
+                            <AlertTriangle className="w-4 h-4 shrink-0" />
+                            <span>Configuration Validation Failed</span>
+                          </div>
+                          <p className="leading-relaxed">{generatorPreview.validationError}</p>
+                        </div>
+                      )}
+
+                      {/* Suggestions Engine Box if Invalid */}
+                      {!generatorPreview.isValid && generatorPreview.suggestions?.length > 0 && (
+                        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-3">
+                          <h4 className="font-extrabold text-amber-300 text-xs flex items-center gap-1.5">
+                            <Sparkles className="w-4 h-4 text-accent-amber" /> Suggested Valid Configurations:
+                          </h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {generatorPreview.suggestions.map((sug: any, idx: number) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => handleApplySuggestion(sug)}
+                                className="p-2.5 rounded-xl bg-dark-800 hover:bg-dark-700 border border-amber-500/30 hover:border-amber-400 text-left transition group"
+                              >
+                                <div className="font-bold text-white text-xs flex justify-between items-center">
+                                  <span>Option {idx + 1}</span>
+                                  <span className="text-[10px] text-amber-400 font-extrabold uppercase">{sug.knockoutRoundName}</span>
+                                </div>
+                                <p className="text-[11px] text-slate-400 mt-1">
+                                  {sug.groupDistributionText} · Top {sug.qualifiersPerGroup} qualify ({sug.qualifiedTeams} qualified)
+                                </p>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Summary breakdown card */}
                       <div className="p-3.5 rounded-xl bg-dark-800 border border-slate-700 space-y-2">
-                        {selectedFormat === 'ROUND_ROBIN' && (
-                          <>
-                            <div className="flex justify-between"><span className="text-slate-400">Format:</span><span className="font-extrabold text-brand-400">Round Robin Only</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">Eligible Participants:</span><span className="font-bold text-white">{generatorPreview.totalTeams}</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">Total Matches:</span><span className="font-bold text-amber-400">{generatorPreview.totalRoundRobinMatches} matches</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">Knockout:</span><span className="font-semibold text-slate-500">None â€” League standings only</span></div>
-                          </>
-                        )}
                         {selectedFormat === 'GROUP_STAGE' && (
                           <>
-                            <div className="flex justify-between"><span className="text-slate-400">Format:</span><span className="font-extrabold text-emerald-400">Group Round Robin + Knockout</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">Eligible Participants:</span><span className="font-bold text-white">{generatorPreview.totalTeams}</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">Groups (max 3/group):</span><span className="font-bold text-accent-cyan">{generatorPreview.numberOfGroups} groups</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">Group Fixtures:</span><span className="font-bold text-amber-400">{generatorPreview.totalGroupMatches} matches</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">Qualification:</span><span className="font-bold text-emerald-400">{generatorPreview.qualificationRule}</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">Knockout:</span><span className="font-bold text-white">{generatorPreview.knockoutStructure}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">Total Teams:</span><span className="font-bold text-white">{generatorPreview.totalTeams}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">Number of Groups:</span><span className="font-bold text-accent-cyan">{generatorPreview.numberOfGroups} groups</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">Qualifiers Per Group:</span><span className="font-bold text-emerald-400">{generatorPreview.qualifiersPerGroup} teams</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">Qualification Method:</span><span className="font-semibold text-slate-300">{generatorPreview.qualificationRule}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">Qualified Teams:</span><span className="font-bold text-white">{generatorPreview.numberOfGroups} × {generatorPreview.qualifiersPerGroup} = {generatorPreview.expectedQualified}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">Knockout Stage:</span><span className="font-extrabold text-amber-400">{generatorPreview.knockoutStructure}</span></div>
                           </>
                         )}
                         {selectedFormat === 'KNOCKOUT' && (
                           <>
                             <div className="flex justify-between"><span className="text-slate-400">Format:</span><span className="font-extrabold text-accent-cyan">Knockout Only</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">Eligible Participants:</span><span className="font-bold text-white">{generatorPreview.totalTeams}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">Total Teams:</span><span className="font-bold text-white">{generatorPreview.totalTeams}</span></div>
                             <div className="flex justify-between"><span className="text-slate-400">Bracket:</span><span className="font-bold text-white">{generatorPreview.knockoutStructure}</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">Groups:</span><span className="font-semibold text-slate-500">None â€” Direct bracket</span></div>
+                          </>
+                        )}
+                        {selectedFormat === 'ROUND_ROBIN' && (
+                          <>
+                            <div className="flex justify-between"><span className="text-slate-400">Format:</span><span className="font-extrabold text-brand-400">Round Robin Only</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">Total Teams:</span><span className="font-bold text-white">{generatorPreview.totalTeams}</span></div>
+                            <div className="flex justify-between"><span className="text-slate-400">Total Matches:</span><span className="font-bold text-amber-400">{generatorPreview.totalRoundRobinMatches} matches</span></div>
                           </>
                         )}
                       </div>
 
-                      {/* Group distribution (Group Stage only) */}
+                      {/* Group distribution preview (Group Stage only) */}
                       {selectedFormat === 'GROUP_STAGE' && generatorPreview.groups?.length > 0 && (
                         <div className="space-y-2">
-                          <h4 className="font-bold text-slate-300 text-[11px] uppercase tracking-wider">Group Distribution:</h4>
+                          <h4 className="font-bold text-slate-300 text-[11px] uppercase tracking-wider">Group Distribution Preview:</h4>
                           <div className="grid grid-cols-2 gap-2">
                             {generatorPreview.groups.map((g: any) => (
-                              <div key={g.id} className="p-2.5 rounded-xl bg-dark-900 border border-slate-800 text-[11px]">
+                              <div key={g.id || g.name} className="p-2.5 rounded-xl bg-dark-900 border border-slate-800 text-[11px]">
                                 <div className="font-bold text-white flex justify-between items-center mb-1">
                                   <span>{g.name}</span>
-                                  <span className="px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-400 text-[10px] font-bold">{g.teamCount}T Â· {g.matchesCount}M</span>
+                                  <span className="px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-400 text-[10px] font-bold">{g.teamCount} Teams</span>
                                 </div>
-                                <p className="text-slate-400 truncate">{g.teamNames.join(', ')}</p>
+                                {g.teamNames && <p className="text-slate-400 truncate">{g.teamNames.join(', ')}</p>}
                               </div>
                             ))}
                           </div>
                         </div>
                       )}
 
-                      {/* Excluded note */}
-                      {generatorPreview.totalExcluded > 0 && (
-                        <div className="p-2.5 rounded-xl bg-dark-900 border border-slate-800 text-xs flex items-center gap-2 text-slate-400">
-                          <UserX className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                          {generatorPreview.totalExcluded} participant{generatorPreview.totalExcluded > 1 ? 's' : ''} excluded (wrong category/gender).
-                        </div>
-                      )}
-
-                      {/* Existing fixtures warning */}
-                      {generatorPreview.fixturesExist && (
-                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-2">
-                          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                          <div>
-                            <strong>{generatorPreview.existingMatchesCount} existing fixtures will be deleted and recreated.</strong>
-                            <p className="mt-0.5 text-[11px] text-amber-200/80">Scores and standings for this category will be reset.</p>
-                          </div>
-                        </div>
-                      )}
-
                       {/* Confirmation checkbox */}
-                      <label className="flex items-start gap-2.5 p-3 rounded-xl bg-dark-800/90 border border-slate-700/80 cursor-pointer select-none hover:border-slate-600 transition">
-                        <input type="checkbox" checked={confirmGenerateChecked} onChange={(e) => setConfirmGenerateChecked(e.target.checked)}
-                          className="mt-0.5 rounded border-slate-700 text-brand-500 focus:ring-brand-500 cursor-pointer" />
-                        <span className="text-slate-300 text-xs leading-relaxed">
-                          I confirm: generate{' '}
-                          <strong className="text-white">
-                            {selectedFormat === 'ROUND_ROBIN' ? 'Round Robin Only' :
-                             selectedFormat === 'GROUP_STAGE' ? 'Group Round Robin + Knockout' : 'Knockout Only'}
-                          </strong>{' '}
-                          fixtures for <strong className="text-white">{generatorPreview.totalTeams} eligible {catLabel} participants</strong>.
-                          {generatorPreview.totalExcluded > 0 && ` (${generatorPreview.totalExcluded} excluded by category filter.)`}
-                        </span>
-                      </label>
+                      {generatorPreview.isValid && (
+                        <label className="flex items-start gap-2.5 p-3 rounded-xl bg-dark-800/90 border border-slate-700/80 cursor-pointer select-none hover:border-slate-600 transition">
+                          <input type="checkbox" checked={confirmGenerateChecked} onChange={(e) => setConfirmGenerateChecked(e.target.checked)}
+                            className="mt-0.5 rounded border-slate-700 text-brand-500 focus:ring-brand-500 cursor-pointer" />
+                          <span className="text-slate-300 text-xs leading-relaxed">
+                            I confirm: generate{' '}
+                            <strong className="text-white">
+                              {selectedFormat === 'ROUND_ROBIN' ? 'Round Robin Only' :
+                               selectedFormat === 'GROUP_STAGE' ? 'Group Stage + Knockout' : 'Knockout Only'}
+                            </strong>{' '}
+                            fixtures for <strong className="text-white">{generatorPreview.totalTeams} eligible {catLabel} participants</strong>.
+                          </span>
+                        </label>
+                      )}
 
                       <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-800">
                         <button type="button" onClick={() => setIsGeneratorModalOpen(false)} disabled={isGenerating}
@@ -1309,7 +1380,7 @@ export const AdminFixturesPage: React.FC = () => {
                           Cancel
                         </button>
                         <button type="button" onClick={() => handleConfirmGenerateFixtures(generatorPreview.fixturesExist)}
-                          disabled={isGenerating || !confirmGenerateChecked}
+                          disabled={isGenerating || !generatorPreview.isValid || !confirmGenerateChecked}
                           className="px-4 py-2.5 rounded-xl bg-accent-amber hover:bg-amber-600 text-dark-900 font-extrabold text-xs flex items-center gap-2 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition">
                           {isGenerating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                           {generatorPreview.fixturesExist ? 'Regenerate Fixtures' : 'Generate Fixtures'}
@@ -1324,9 +1395,6 @@ export const AdminFixturesPage: React.FC = () => {
           </div>
         );
       })()}
-
-
-
 
       {/* Delete Single Match Confirmation Modal */}
       <ConfirmModal

@@ -376,9 +376,9 @@ export const AdminTournamentsPage: React.FC = () => {
                     onChange={(e) => setFormat(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white"
                   >
-                    <option value="KNOCKOUT">KNOCKOUT</option>
-                    <option value="ROUND_ROBIN">ROUND_ROBIN</option>
-                    <option value="GROUP_KNOCKOUT">GROUP_KNOCKOUT</option>
+                    <option value="KNOCKOUT">Knockout Only</option>
+                    <option value="GROUP_KNOCKOUT">Group Stage + Knockout</option>
+                    <option value="ROUND_ROBIN">Round Robin Only</option>
                   </select>
                 </div>
               </div>

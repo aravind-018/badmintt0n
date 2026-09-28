@@ -7,10 +7,13 @@ import {
   distributeTeamsIntoGroups,
   generateGroupRoundRobinMatches,
   generateNormalRoundRobinMatches,
+  seedKnockoutFirstRound,
   createKnockoutMatchesInTx,
   updateGroupStandingsAndQualification,
   Participant,
+  QualifiedSlot,
 } from '../utils/fixtureGenerator';
+import { validateGroupKnockoutConfig, isPowerOfTwo, getKnockoutRoundName } from '@badminton-live/shared';
 import { logAudit } from '../utils/audit';
 
 export const matchRouter = Router();
@@ -603,18 +606,59 @@ matchRouter.post('/eligible-participants', authenticateToken, requireRole('SUPER
 });
 
 
+// GET /api/v1/matches/qualified-teams — Get qualified teams for knockout stage by group
+matchRouter.get('/qualified-teams', async (req, res) => {
+  const { tournamentId, categoryId } = req.query;
+
+  if (!tournamentId) {
+    res.status(400).json({ error: 'Tournament ID is required' });
+    return;
+  }
+
+  try {
+    const tId = String(tournamentId);
+    const cId = categoryId ? String(categoryId) : undefined;
+
+    const where: any = { tournamentId: tId, qualified: true };
+    if (cId) where.categoryId = cId;
+
+    const standings = await prisma.standing.findMany({
+      where,
+      include: {
+        team: { select: { id: true, name: true, logoUrl: true, organization: true } },
+      },
+      orderBy: [{ groupOrder: 'asc' }, { position: 'asc' }],
+    });
+
+    const groupsMap: Record<string, any[]> = {};
+    for (const s of standings) {
+      const gName = s.groupName || 'Group A';
+      if (!groupsMap[gName]) groupsMap[gName] = [];
+      groupsMap[gName].push(s);
+    }
+
+    res.json({
+      tournamentId: tId,
+      categoryId: cId || null,
+      totalQualified: standings.length,
+      groups: groupsMap,
+      qualifiedTeams: standings,
+    });
+  } catch (err: any) {
+    console.error('[Qualified Teams Error]', err);
+    res.status(500).json({ error: 'Failed to fetch qualified teams', details: err.message });
+  }
+});
+
 // POST /api/v1/matches/preview-fixtures — Preview fixture generation details before confirming
 matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
-  const { tournamentId, categoryId, format: requestedFormat } = req.body;
+  const { tournamentId, categoryId, format: requestedFormat, numberOfGroups: reqGroups, qualifiersPerGroup: reqQualifiers } = req.body;
 
   if (!tournamentId || !categoryId) {
     res.status(400).json({ error: 'Tournament ID and Category ID are required' });
     return;
   }
 
-  const category = await prisma.category.findUnique({ where: { id: categoryId } });
-
-  // Use eligibility-aware function — only eligible participants are used
   const { eligible: participants, excluded, categoryType } = await getCategoryEligibility(tournamentId, categoryId);
   const totalTeams = participants.length;
 
@@ -622,7 +666,6 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
     where: { tournamentId, categoryId },
   });
 
-  // Determine format to preview
   const format: string = requestedFormat || (totalTeams >= 6 ? 'GROUP_KNOCKOUT' : 'KNOCKOUT');
 
   if (format === 'ROUND_ROBIN') {
@@ -631,7 +674,6 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
       preview: {
         tournamentFormat: 'ROUND_ROBIN',
         categoryType,
-        isGroupStageEligible: false,
         totalTeams,
         totalEligible: totalTeams,
         totalExcluded: excluded.length,
@@ -645,39 +687,63 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
         eligibleList: participants.map(p => p.name),
         fixturesExist: existingMatchesCount > 0,
         existingMatchesCount,
+        isValid: true,
       },
     });
     return;
   }
 
-  const isGroupStageEligible = totalTeams >= 6;
-
-  if ((format === 'GROUP_STAGE' || format === 'GROUP_KNOCKOUT') && !isGroupStageEligible) {
-    res.status(400).json({ error: `Group Round Robin + Knockout requires at least 6 eligible teams. Only ${totalTeams} found for this category.` });
+  if (format === 'KNOCKOUT') {
+    const isPower = isPowerOfTwo(totalTeams);
+    const roundName = getKnockoutRoundName(totalTeams);
+    res.json({
+      preview: {
+        tournamentFormat: 'KNOCKOUT',
+        categoryType,
+        totalTeams,
+        totalEligible: totalTeams,
+        totalExcluded: excluded.length,
+        numberOfGroups: 0,
+        groups: [],
+        totalGroupMatches: 0,
+        qualificationRule: 'N/A (Knockout)',
+        expectedQualified: totalTeams,
+        knockoutStructure: isPower ? `${roundName} (${totalTeams} teams) → Grand Final` : `Knockout Bracket (${totalTeams} teams)`,
+        eligibleList: participants.map(p => p.name),
+        fixturesExist: existingMatchesCount > 0,
+        existingMatchesCount,
+        isValid: totalTeams >= 2,
+        validationError: totalTeams < 2 ? 'At least 2 eligible teams are required for Knockout format.' : null,
+      },
+    });
     return;
   }
 
-  const isGroupStage = format === 'GROUP_STAGE' || format === 'GROUP_KNOCKOUT';
-  const groups = isGroupStage ? distributeTeamsIntoGroups(participants) : [];
+  // GROUP_STAGE / GROUP_KNOCKOUT format
+  const numGroups = reqGroups ? Number(reqGroups) : Math.max(1, Math.ceil(totalTeams / 4));
+  const qualPerGroup = reqQualifiers ? Number(reqQualifiers) : 2;
+
+  const validation = validateGroupKnockoutConfig(totalTeams, numGroups, qualPerGroup);
+  const groups = distributeTeamsIntoGroups(participants, numGroups);
 
   let totalGroupMatches = 0;
   groups.forEach((g) => {
     totalGroupMatches += (g.teams.length * (g.teams.length - 1)) / 2;
   });
 
-  const topN = category?.qualificationRule === 'TOP_1' ? 1 : 2;
-  const expectedQualified = groups.length * topN;
-
   res.json({
     preview: {
-      tournamentFormat: format,
+      tournamentFormat: 'GROUP_KNOCKOUT',
       categoryType,
-      isGroupStageEligible,
-      groupStageRequirementMessage: !isGroupStageEligible ? 'Group Round Robin + Knockout requires a minimum of 6 eligible teams.' : null,
       totalTeams,
       totalEligible: totalTeams,
       totalExcluded: excluded.length,
-      numberOfGroups: groups.length,
+      numberOfGroups: numGroups,
+      qualifiersPerGroup: qualPerGroup,
+      expectedQualified: validation.qualifiedTeams,
+      knockoutStructure: validation.valid
+        ? `${validation.knockoutRoundName} (${validation.qualifiedTeams} teams) → Grand Final`
+        : 'Invalid Knockout Structure',
       groups: groups.map((g) => ({
         id: g.id,
         name: g.name,
@@ -686,31 +752,28 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
         matchesCount: (g.teams.length * (g.teams.length - 1)) / 2,
       })),
       totalGroupMatches,
-      qualificationRule: isGroupStage ? `Top ${topN} from each group` : 'N/A (Knockout)',
-      expectedQualified: isGroupStage ? expectedQualified : totalTeams,
-      knockoutStructure: isGroupStage
-        ? expectedQualified === 8
-          ? 'Quarter Finals (8 teams) → Semi Finals → Grand Final'
-          : expectedQualified === 6
-          ? 'Quarter Finals (6 teams) → Semi Finals → Grand Final'
-          : expectedQualified === 4
-          ? 'Semi Finals (4 teams) → Grand Final'
-          : 'Knockout Bracket'
-        : totalTeams >= 4
-        ? 'Semi Finals → Grand Final'
-        : totalTeams >= 2
-        ? 'Grand Final'
-        : 'Knockout Bracket',
+      qualificationRule: `Top ${qualPerGroup} from each group`,
       fixturesExist: existingMatchesCount > 0,
       existingMatchesCount,
+      isValid: validation.valid,
+      validationError: validation.error || null,
+      suggestions: validation.suggestions || [],
+      minGroupSize: validation.minGroupSize,
+      maxGroupSize: validation.maxGroupSize,
     },
   });
 });
 
-
 // POST /api/v1/matches/generate-fixtures — Generate fixtures end-to-end (Group Stage + Knockout)
 matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
-  const { tournamentId, categoryId, confirmRegenerate, format: requestedFormat } = req.body;
+  const {
+    tournamentId,
+    categoryId,
+    confirmRegenerate,
+    format: requestedFormat,
+    numberOfGroups: reqGroups,
+    qualifiersPerGroup: reqQualifiers,
+  } = req.body;
 
   if (!tournamentId || !categoryId) {
     res.status(400).json({ error: 'Tournament ID and Category ID are required' });
@@ -731,36 +794,33 @@ matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADM
     return;
   }
 
-  // SERVER-SIDE ELIGIBILITY: independently determine eligible participants by category type.
-  // This cannot be bypassed by the frontend — the backend always filters by gender/category.
   const { eligible: participants, categoryType } = await getCategoryEligibility(tournamentId, categoryId);
 
   if (participants.length < 2) {
-    res.status(400).json({ error: `At least 2 eligible participants are required for ${categoryType?.replace(/_/g, ' ') || 'this category'}. Check that teams have players assigned with the correct gender.` });
+    res.status(400).json({
+      error: `At least 2 eligible participants are required for ${categoryType?.replace(/_/g, ' ') || 'this category'}. Check that teams have players assigned with correct gender.`,
+    });
     return;
   }
 
   const totalTeams = participants.length;
-
-  // Validation: If user attempts to force group stage with < 6 eligible teams, reject
-  if ((requestedFormat === 'GROUP_STAGE' || requestedFormat === 'GROUP_KNOCKOUT') && totalTeams < 6) {
-    res.status(400).json({ error: `Group Round Robin + Knockout requires at least 6 eligible teams. Only ${totalTeams} found for ${categoryType?.replace(/_/g, ' ')}.` });
-    return;
-  }
-
   const isRoundRobin = requestedFormat === 'ROUND_ROBIN';
-  const isGroupStage = !isRoundRobin && (
-    requestedFormat
-      ? (requestedFormat === 'GROUP_STAGE' || requestedFormat === 'GROUP_KNOCKOUT')
-      : (totalTeams >= 6)
-  );
+  const isGroupStage = requestedFormat === 'GROUP_STAGE' || requestedFormat === 'GROUP_KNOCKOUT';
 
-  if (isGroupStage && totalTeams < 6) {
-    res.status(400).json({ error: 'Group Stage requires at least 6 teams.' });
-    return;
+  let numGroups = reqGroups ? Number(reqGroups) : Math.max(1, Math.ceil(totalTeams / 4));
+  let qualPerGroup = reqQualifiers ? Number(reqQualifiers) : 2;
+
+  if (isGroupStage) {
+    const valResult = validateGroupKnockoutConfig(totalTeams, numGroups, qualPerGroup);
+    if (!valResult.valid) {
+      res.status(400).json({
+        error: valResult.error,
+        validation: valResult,
+        suggestions: valResult.suggestions,
+      });
+      return;
+    }
   }
-
-  const category = await prisma.category.findUnique({ where: { id: categoryId } });
 
   try {
     const createdMatches = await prisma.$transaction(async (tx) => {
@@ -776,8 +836,7 @@ matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADM
       await tx.standing.deleteMany({ where: { tournamentId, categoryId } });
 
       if (isRoundRobin) {
-        // ── NORMAL ROUND ROBIN ── All teams in one pool, no knockout
-        // Create Standing record for every participant
+        // ── ROUND ROBIN ONLY ──
         for (let pos = 0; pos < participants.length; pos++) {
           const team = participants[pos];
           await tx.standing.create({
@@ -811,13 +870,11 @@ matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADM
           createdRRMatches.push(m);
         }
         return createdRRMatches;
-
       } else if (isGroupStage) {
-        // ── GROUP STAGE (>= 6 teams, max 3 per group) ──
-        const groups = distributeTeamsIntoGroups(participants);
+        // ── GROUP STAGE + KNOCKOUT ──
+        const groups = distributeTeamsIntoGroups(participants, numGroups);
         const matchesToCreate: any[] = [];
 
-        // Create initial Standing records for every participant in their group
         for (const g of groups) {
           for (let pos = 0; pos < g.teams.length; pos++) {
             const team = g.teams[pos];
@@ -846,39 +903,46 @@ matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADM
           }
         }
 
-        // Generate group stage round-robin matches
         for (const g of groups) {
           const groupMatches = generateGroupRoundRobinMatches(tournamentId, categoryId, g);
           matchesToCreate.push(...groupMatches);
         }
 
-        // Insert group stage matches
         const createdGroupMatches = [];
         for (const mData of matchesToCreate) {
           const m = await tx.match.create({ data: mData });
           createdGroupMatches.push(m);
         }
 
-        // Create draft Knockout Bracket structure
-        const dummyQualified: Participant[] = [];
-        const topN = category?.qualificationRule === 'TOP_1' ? 1 : 2;
-        groups.forEach((g) => {
-          for (let k = 0; k < topN; k++) {
+        // Build placeholder qualified slots for First Round Knockout Seeding
+        const dummyQualified: QualifiedSlot[] = [];
+        for (const g of groups) {
+          for (let k = 1; k <= qualPerGroup; k++) {
             dummyQualified.push({
-              id: 'TBD',
-              name: `Qualified ${g.name} #${k + 1}`,
+              groupId: g.id,
+              groupName: g.name,
+              groupOrder: g.order,
+              position: k,
+              name: `Qualified ${g.name} #${k}`,
               type: 'PLAYER',
             });
           }
-        });
+        }
 
-        const createdKnockoutMatches = await createKnockoutMatchesInTx(tx, tournamentId, categoryId, dummyQualified);
+        const seededPairs = seedKnockoutFirstRound(dummyQualified, groups.length, qualPerGroup);
+        const createdKnockoutMatches = await createKnockoutMatchesInTx(tx, tournamentId, categoryId, seededPairs);
 
         return [...createdGroupMatches, ...createdKnockoutMatches];
-
       } else {
-        // ── COMPLETE KNOCKOUT ── Direct knockout bracket with all teams
-        const createdKnockoutMatches = await createKnockoutMatchesInTx(tx, tournamentId, categoryId, participants);
+        // ── KNOCKOUT ONLY ──
+        const dummyPairs: { sideA: Participant; sideB: Participant }[] = [];
+        for (let i = 0; i < participants.length; i += 2) {
+          dummyPairs.push({
+            sideA: participants[i],
+            sideB: participants[i + 1] || { id: 'TBD', name: 'TBD', type: 'PLAYER' },
+          });
+        }
+        const createdKnockoutMatches = await createKnockoutMatchesInTx(tx, tournamentId, categoryId, dummyPairs);
         return createdKnockoutMatches;
       }
     });

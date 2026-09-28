@@ -1,5 +1,5 @@
-import React from 'react';
-import { Shield, Trophy, CheckCircle2, Clock, CheckCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Shield, CheckCircle } from 'lucide-react';
 
 interface StandingItem {
   id: string;
@@ -25,8 +25,9 @@ interface GroupStageViewProps {
   progress?: { totalMatches: number; completedMatches: number; isGroupStageComplete: boolean };
 }
 
-export const GroupStageView: React.FC<GroupStageViewProps> = ({ groups, groupMatches = [], progress }) => {
+export const GroupStageView: React.FC<GroupStageViewProps> = ({ groups, progress }) => {
   const groupKeys = Object.keys(groups);
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('ALL');
 
   if (groupKeys.length === 0) {
     return (
@@ -38,34 +39,58 @@ export const GroupStageView: React.FC<GroupStageViewProps> = ({ groups, groupMat
     );
   }
 
+  const displayedGroups = selectedGroupFilter === 'ALL'
+    ? groupKeys
+    : groupKeys.filter((g) => g === selectedGroupFilter);
+
   return (
-    <div className="space-y-8">
-      {/* Progress Header */}
-      {progress && (
-        <div className="glass-card p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border border-brand-500/30">
-          <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-brand-400 flex items-center gap-1.5">
-              <Shield className="w-4 h-4 text-brand-500" />
-              {progress.isGroupStageComplete ? 'Group Stage Completed' : 'Group Stage In Progress'}
-            </span>
-            <p className="text-slate-300 text-xs mt-0.5">
-              {progress.completedMatches} / {progress.totalMatches} group matches completed
-            </p>
-          </div>
-          <div className="w-full sm:w-48 bg-dark-800 rounded-full h-2.5 overflow-hidden border border-slate-700">
-            <div
-              className="bg-gradient-to-r from-brand-600 to-accent-emerald h-full transition-all duration-500"
-              style={{
-                width: `${progress.totalMatches > 0 ? (progress.completedMatches / progress.totalMatches) * 100 : 0}%`,
-              }}
-            />
-          </div>
+    <div className="space-y-6">
+      {/* Progress Header & Group Filter */}
+      <div className="glass-card p-4 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-brand-500/30">
+        <div>
+          <span className="text-xs font-bold uppercase tracking-wider text-brand-400 flex items-center gap-1.5">
+            <Shield className="w-4 h-4 text-brand-500" />
+            {progress?.isGroupStageComplete ? 'Group Stage Completed' : 'Group Stage In Progress'}
+          </span>
+          <p className="text-slate-300 text-xs mt-0.5">
+            {progress ? `${progress.completedMatches} / ${progress.totalMatches} group matches completed` : `${groupKeys.length} Groups`}
+          </p>
         </div>
-      )}
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+          {/* Group Filter Select */}
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-400 font-semibold whitespace-nowrap">Filter Group:</label>
+            <select
+              value={selectedGroupFilter}
+              onChange={(e) => setSelectedGroupFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-xl bg-dark-800 border border-slate-700 text-white text-xs font-bold focus:outline-none focus:border-brand-500"
+            >
+              <option value="ALL">All Groups ({groupKeys.length})</option>
+              {groupKeys.map((gName) => (
+                <option key={gName} value={gName}>
+                  {gName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {progress && progress.totalMatches > 0 && (
+            <div className="w-full sm:w-40 bg-dark-800 rounded-full h-2.5 overflow-hidden border border-slate-700 self-center">
+              <div
+                className="bg-gradient-to-r from-brand-600 to-accent-emerald h-full transition-all duration-500"
+                style={{
+                  width: `${(progress.completedMatches / progress.totalMatches) * 100}%`,
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Group Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {groupKeys.map((groupName) => {
+        {displayedGroups.map((groupName) => {
           const standingsList = groups[groupName] || [];
 
           return (
@@ -88,6 +113,7 @@ export const GroupStageView: React.FC<GroupStageViewProps> = ({ groups, groupMat
                       <th className="py-2 px-2 text-center">P</th>
                       <th className="py-2 px-2 text-center">W</th>
                       <th className="py-2 px-2 text-center">L</th>
+                      <th className="py-2 px-2 text-center">GD</th>
                       <th className="py-2 px-2 text-center font-bold text-white">PTS</th>
                       <th className="py-2 px-2 text-right">Status</th>
                     </tr>
@@ -96,6 +122,7 @@ export const GroupStageView: React.FC<GroupStageViewProps> = ({ groups, groupMat
                     {standingsList.map((row) => {
                       const name = row.team?.name || row.teamName || 'Team';
                       const isQualified = row.qualified || row.qualificationStatus === 'QUALIFIED';
+                      const gameDiff = row.gamesWon - row.gamesLost;
 
                       return (
                         <tr
@@ -114,6 +141,9 @@ export const GroupStageView: React.FC<GroupStageViewProps> = ({ groups, groupMat
                           <td className="py-2.5 px-2 text-center text-slate-400">{row.played}</td>
                           <td className="py-2.5 px-2 text-center text-brand-400 font-bold">{row.won}</td>
                           <td className="py-2.5 px-2 text-center text-rose-400">{row.lost}</td>
+                          <td className={`py-2.5 px-2 text-center font-mono ${gameDiff > 0 ? 'text-brand-400' : gameDiff < 0 ? 'text-rose-400' : 'text-slate-400'}`}>
+                            {gameDiff > 0 ? `+${gameDiff}` : gameDiff}
+                          </td>
                           <td className="py-2.5 px-2 text-center font-extrabold text-white text-sm">{row.tournamentPoints}</td>
                           <td className="py-2.5 px-2 text-right">
                             <span
