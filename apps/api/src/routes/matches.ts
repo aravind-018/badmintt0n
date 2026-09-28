@@ -337,13 +337,16 @@ matchRouter.delete('/all', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNA
       await tx.matchGame.deleteMany({ where: { matchId: { in: matchIds } } });
       await tx.match.updateMany({ where: { id: { in: matchIds } }, data: { nextMatchId: null } });
       await tx.match.deleteMany({ where: { id: { in: matchIds } } });
+      // Clear group standings so the Group Stage view resets completely
+      await tx.standing.deleteMany({ where });
     });
 
-    res.json({ message: 'All fixtures deleted successfully', count: matchIds.length });
+    res.json({ message: 'All fixtures and standings deleted successfully', count: matchIds.length });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to delete fixtures', details: err.message });
   }
 });
+
 
 // DELETE /api/v1/matches/brackets/all — Delete all bracket matches
 matchRouter.delete('/brackets/all', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
@@ -367,9 +370,11 @@ matchRouter.delete('/brackets/all', authenticateToken, requireRole('SUPER_ADMIN'
       await tx.matchGame.deleteMany({ where: { matchId: { in: matchIds } } });
       await tx.match.updateMany({ where: { id: { in: matchIds } }, data: { nextMatchId: null } });
       await tx.match.deleteMany({ where: { id: { in: matchIds } } });
+      // Clear standings so Group Stage view resets completely
+      await tx.standing.deleteMany({ where });
     });
 
-    res.json({ message: 'Bracket deleted successfully', count: matchIds.length });
+    res.json({ message: 'Bracket and standings deleted successfully', count: matchIds.length });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to delete bracket matches', details: err.message });
   }
