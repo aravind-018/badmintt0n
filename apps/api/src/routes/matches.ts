@@ -392,10 +392,41 @@ matchRouter.delete('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNA
 
 
 
-// Helper: Get participants (Teams or Player Pairs) for a category in a tournament
-async function getCategoryParticipants(tournamentId: string, categoryId: string): Promise<Participant[]> {
+// ── Eligibility types ──────────────────────────────────────────────────────────
+
+interface ExcludedEntry {
+  id: string;
+  name: string;
+  reason: string;
+}
+
+interface EligibilityResult {
+  eligible: Participant[];
+  excluded: ExcludedEntry[];
+  categoryType: string;
+}
+
+/**
+ * Determines which teams/players are eligible for the selected category.
+ *
+ * Eligibility rules (using actual Player.gender data — NOT team-name guessing):
+ *   MENS_DOUBLES   — team must have ≥ 2 players, all checked male (≥ 2 MALE)
+ *   WOMENS_DOUBLES — team must have ≥ 2 players, all checked female (≥ 2 FEMALE)
+ *   MIXED_DOUBLES  — team must have ≥ 2 players, ≥ 1 MALE + ≥ 1 FEMALE
+ *   MENS_SINGLES   — team entry's primary player must be MALE (or gender unknown → legacy include)
+ *   WOMENS_SINGLES — team entry's primary player must be FEMALE (or gender unknown → legacy include)
+ *   TEAM_EVENT     — all teams eligible
+ *
+ * Falls back to all teams if no gender data exists (legacy data guard).
+ */
+async function getCategoryEligibility(tournamentId: string, categoryId: string): Promise<EligibilityResult> {
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
-  const isDoubles = category?.type === 'MENS_DOUBLES' || category?.type === 'WOMENS_DOUBLES' || category?.type === 'MIXED_DOUBLES';
+  if (!category) return { eligible: [], excluded: [], categoryType: 'UNKNOWN' };
+
+  const catType = category.type as string; // CategoryType enum value
+
+  const isDoubles = ['MENS_DOUBLES', 'WOMENS_DOUBLES', 'MIXED_DOUBLES'].includes(catType);
+  const isSingles = ['MENS_SINGLES', 'WOMENS_SINGLES'].includes(catType);
 
   const teams = await prisma.team.findMany({
     where: { tournamentId },
@@ -403,47 +434,168 @@ async function getCategoryParticipants(tournamentId: string, categoryId: string)
     orderBy: { name: 'asc' },
   });
 
-  if (teams.length >= 2) {
-    return teams.map((team) => {
-      let name = team.name;
-      if (isDoubles) {
-        if (team.teamPlayers.length >= 2) {
-          const playerPair = team.teamPlayers.map((tp) => tp.player.name).slice(0, 2).join(' / ');
-          name = `${playerPair} (${team.name})`;
-        } else if (team.teamPlayers.length === 1) {
-          name = `${team.teamPlayers[0].player.name} (${team.name})`;
+  const eligible: Participant[] = [];
+  const excluded: ExcludedEntry[] = [];
+
+  // ── DOUBLES ────────────────────────────────────────────────────────────────
+  if (isDoubles) {
+    for (const team of teams) {
+      const players = team.teamPlayers.map((tp: any) => tp.player);
+      const maleCount = players.filter((p: any) => p.gender === 'MALE').length;
+      const femaleCount = players.filter((p: any) => p.gender === 'FEMALE').length;
+      const hasGenderData = maleCount + femaleCount > 0;
+
+      if (players.length < 2) {
+        excluded.push({ id: team.id, name: team.name, reason: 'Incomplete team (requires 2 players)' });
+        continue;
+      }
+
+      let isEligible = false;
+      let reason = '';
+
+      if (catType === 'MENS_DOUBLES') {
+        if (!hasGenderData) {
+          isEligible = true; // legacy: no gender data → include
+        } else if (maleCount >= 2) {
+          isEligible = true;
+        } else if (femaleCount >= 2) {
+          reason = "Excluded — Women's Doubles team";
+        } else {
+          reason = "Excluded — Mixed team (Men's Doubles requires 2 male players)";
+        }
+      } else if (catType === 'WOMENS_DOUBLES') {
+        if (!hasGenderData) {
+          isEligible = true;
+        } else if (femaleCount >= 2) {
+          isEligible = true;
+        } else if (maleCount >= 2) {
+          reason = "Excluded — Men's Doubles team";
+        } else {
+          reason = "Excluded — Mixed team (Women's Doubles requires 2 female players)";
+        }
+      } else if (catType === 'MIXED_DOUBLES') {
+        if (!hasGenderData) {
+          isEligible = true;
+        } else if (maleCount >= 1 && femaleCount >= 1) {
+          isEligible = true;
+        } else if (maleCount >= 2) {
+          reason = "Excluded — Men's team (Mixed Doubles requires 1M + 1F)";
+        } else {
+          reason = "Excluded — Women's team (Mixed Doubles requires 1M + 1F)";
         }
       }
-      return { id: team.id, name, type: 'TEAM' };
-    });
-  }
 
-  const fetchedPlayers = await prisma.player.findMany({ orderBy: [{ seed: 'asc' }, { name: 'asc' }] });
-  if (isDoubles) {
-    const pairs: Participant[] = [];
-    for (let i = 0; i < fetchedPlayers.length; i += 2) {
-      if (i + 1 < fetchedPlayers.length) {
-        const p1 = fetchedPlayers[i];
-        const p2 = fetchedPlayers[i + 1];
-        pairs.push({
-          id: `${p1.id}_${p2.id}`,
-          name: `${p1.name} / ${p2.name}`,
-          type: 'PLAYER',
-        });
+      if (isEligible) {
+        let name = team.name;
+        if (players.length >= 2) {
+          const pairNames = players.slice(0, 2).map((p: any) => p.name).join(' / ');
+          name = `${pairNames} (${team.name})`;
+        }
+        eligible.push({ id: team.id, name, type: 'TEAM' });
       } else {
-        const p = fetchedPlayers[i];
-        pairs.push({
-          id: p.id,
-          name: p.name,
-          type: 'PLAYER',
-        });
+        excluded.push({ id: team.id, name: team.name, reason });
       }
     }
-    return pairs;
+
+  // ── SINGLES ────────────────────────────────────────────────────────────────
+  } else if (isSingles) {
+    if (teams.length >= 2) {
+      // Each team entry represents a singles player slot
+      for (const team of teams) {
+        const players = team.teamPlayers.map((tp: any) => tp.player);
+
+        if (players.length === 0) {
+          // No player linked → legacy include (cannot validate)
+          eligible.push({ id: team.id, name: team.name, type: 'TEAM' });
+          continue;
+        }
+
+        const primary = players[0];
+        const displayName = primary.name || team.name;
+
+        // If gender is OTHER or not deterministic, include as legacy fallback
+        if (primary.gender !== 'MALE' && primary.gender !== 'FEMALE') {
+          eligible.push({ id: team.id, name: displayName, type: 'TEAM' });
+          continue;
+        }
+
+        if (catType === 'MENS_SINGLES') {
+          if (primary.gender === 'MALE') {
+            eligible.push({ id: team.id, name: displayName, type: 'TEAM' });
+          } else {
+            excluded.push({ id: team.id, name: team.name, reason: "Excluded — Female player (Men's Singles)" });
+          }
+        } else if (catType === 'WOMENS_SINGLES') {
+          if (primary.gender === 'FEMALE') {
+            eligible.push({ id: team.id, name: displayName, type: 'TEAM' });
+          } else {
+            excluded.push({ id: team.id, name: team.name, reason: "Excluded — Male player (Women's Singles)" });
+          }
+        }
+      }
+    } else {
+      // Fallback: use standalone Player records
+      const fetchedPlayers = await prisma.player.findMany({ orderBy: [{ seed: 'asc' }, { name: 'asc' }] });
+      for (const p of fetchedPlayers) {
+        if (catType === 'MENS_SINGLES') {
+          if (p.gender === 'MALE') {
+            eligible.push({ id: p.id, name: p.name, type: 'PLAYER' });
+          } else {
+            excluded.push({ id: p.id, name: p.name, reason: "Excluded — Not eligible for Men's Singles" });
+          }
+        } else if (catType === 'WOMENS_SINGLES') {
+          if (p.gender === 'FEMALE') {
+            eligible.push({ id: p.id, name: p.name, type: 'PLAYER' });
+          } else {
+            excluded.push({ id: p.id, name: p.name, reason: "Excluded — Not eligible for Women's Singles" });
+          }
+        }
+      }
+    }
+
+  // ── TEAM EVENT / FALLBACK ──────────────────────────────────────────────────
+  } else {
+    for (const team of teams) {
+      eligible.push({ id: team.id, name: team.name, type: 'TEAM' });
+    }
   }
 
-  return fetchedPlayers.map((p) => ({ id: p.id, name: p.name, type: 'PLAYER' }));
+  return { eligible, excluded, categoryType: catType };
 }
+
+// Backward-compatible wrapper: returns only eligible participants (used by existing callers)
+async function getCategoryParticipants(tournamentId: string, categoryId: string): Promise<Participant[]> {
+  const result = await getCategoryEligibility(tournamentId, categoryId);
+  return result.eligible;
+}
+
+
+// POST /api/v1/matches/eligible-participants — Get eligible/excluded participants for a category
+matchRouter.post('/eligible-participants', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
+  const { tournamentId, categoryId } = req.body;
+
+  if (!tournamentId || !categoryId) {
+    res.status(400).json({ error: 'Tournament ID and Category ID are required' });
+    return;
+  }
+
+  try {
+    const result = await getCategoryEligibility(tournamentId, categoryId);
+    const category = await prisma.category.findUnique({ where: { id: categoryId } });
+
+    res.json({
+      categoryType: result.categoryType,
+      categoryLabel: category?.type?.replace(/_/g, ' ') || result.categoryType,
+      totalEligible: result.eligible.length,
+      totalExcluded: result.excluded.length,
+      eligible: result.eligible,
+      excluded: result.excluded,
+    });
+  } catch (err: any) {
+    console.error('[Eligible Participants Error]', err);
+    res.status(500).json({ error: 'Failed to determine eligible participants', details: err.message });
+  }
+});
 
 
 // POST /api/v1/matches/preview-fixtures — Preview fixture generation details before confirming
@@ -456,7 +608,9 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
   }
 
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
-  const participants = await getCategoryParticipants(tournamentId, categoryId);
+
+  // Use eligibility-aware function — only eligible participants are used
+  const { eligible: participants, excluded, categoryType } = await getCategoryEligibility(tournamentId, categoryId);
   const totalTeams = participants.length;
 
   const existingMatchesCount = await prisma.match.count({
@@ -464,7 +618,6 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
   });
 
   // Determine format to preview
-  // requestedFormat may be: 'ROUND_ROBIN' | 'GROUP_STAGE' | 'GROUP_KNOCKOUT' | 'KNOCKOUT'
   const format: string = requestedFormat || (totalTeams >= 6 ? 'GROUP_KNOCKOUT' : 'KNOCKOUT');
 
   if (format === 'ROUND_ROBIN') {
@@ -472,8 +625,11 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
     res.json({
       preview: {
         tournamentFormat: 'ROUND_ROBIN',
+        categoryType,
         isGroupStageEligible: false,
         totalTeams,
+        totalEligible: totalTeams,
+        totalExcluded: excluded.length,
         numberOfGroups: 0,
         groups: [],
         totalGroupMatches: 0,
@@ -481,6 +637,7 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
         expectedQualified: 0,
         knockoutStructure: 'No Knockout — League Only',
         totalRoundRobinMatches: totalMatches,
+        eligibleList: participants.map(p => p.name),
         fixturesExist: existingMatchesCount > 0,
         existingMatchesCount,
       },
@@ -491,7 +648,7 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
   const isGroupStageEligible = totalTeams >= 6;
 
   if ((format === 'GROUP_STAGE' || format === 'GROUP_KNOCKOUT') && !isGroupStageEligible) {
-    res.status(400).json({ error: 'Group Stage requires at least 6 teams.' });
+    res.status(400).json({ error: `Group Round Robin + Knockout requires at least 6 eligible teams. Only ${totalTeams} found for this category.` });
     return;
   }
 
@@ -509,9 +666,12 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
   res.json({
     preview: {
       tournamentFormat: format,
+      categoryType,
       isGroupStageEligible,
-      groupStageRequirementMessage: !isGroupStageEligible ? 'Group Stage requires a minimum of 6 teams.' : null,
+      groupStageRequirementMessage: !isGroupStageEligible ? 'Group Round Robin + Knockout requires a minimum of 6 eligible teams.' : null,
       totalTeams,
+      totalEligible: totalTeams,
+      totalExcluded: excluded.length,
       numberOfGroups: groups.length,
       groups: groups.map((g) => ({
         id: g.id,
@@ -542,6 +702,7 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
   });
 });
 
+
 // POST /api/v1/matches/generate-fixtures — Generate fixtures end-to-end (Group Stage + Knockout)
 matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMENT_ADMIN'), async (req: AuthRequest, res: Response) => {
   const { tournamentId, categoryId, confirmRegenerate, format: requestedFormat } = req.body;
@@ -565,18 +726,20 @@ matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADM
     return;
   }
 
-  const participants = await getCategoryParticipants(tournamentId, categoryId);
+  // SERVER-SIDE ELIGIBILITY: independently determine eligible participants by category type.
+  // This cannot be bypassed by the frontend — the backend always filters by gender/category.
+  const { eligible: participants, categoryType } = await getCategoryEligibility(tournamentId, categoryId);
 
   if (participants.length < 2) {
-    res.status(400).json({ error: 'At least 2 teams or players are required to generate fixtures.' });
+    res.status(400).json({ error: `At least 2 eligible participants are required for ${categoryType?.replace(/_/g, ' ') || 'this category'}. Check that teams have players assigned with the correct gender.` });
     return;
   }
 
   const totalTeams = participants.length;
 
-  // Validation: If user attempts to force group stage with < 6 teams, reject with clear error message
+  // Validation: If user attempts to force group stage with < 6 eligible teams, reject
   if ((requestedFormat === 'GROUP_STAGE' || requestedFormat === 'GROUP_KNOCKOUT') && totalTeams < 6) {
-    res.status(400).json({ error: 'Group Stage requires at least 6 teams.' });
+    res.status(400).json({ error: `Group Round Robin + Knockout requires at least 6 eligible teams. Only ${totalTeams} found for ${categoryType?.replace(/_/g, ' ')}.` });
     return;
   }
 
