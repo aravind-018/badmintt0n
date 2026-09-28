@@ -139,7 +139,7 @@ export const VisualBracketTree: React.FC<VisualBracketTreeProps> = ({ matches, o
       </div>
 
       {/* Bracket Canvas Container */}
-      <div className="overflow-x-auto select-none touch-pan-x pb-8 pt-2">
+      <div className="overflow-x-auto pb-8 pt-2">
         <div
           className="flex items-stretch gap-8 min-w-[768px] lg:min-w-[1024px] px-2"
           style={{ width: `${Math.max(roundsToDisplay.length * 300, 900)}px` }}
