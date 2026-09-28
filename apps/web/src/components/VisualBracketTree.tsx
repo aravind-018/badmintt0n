@@ -78,26 +78,46 @@ export const VisualBracketTree: React.FC<VisualBracketTreeProps> = ({ matches, o
 
   // Categorize matches by round name
   const playInMatches = knockoutMatches.filter(
-    (m) => m.stage === 'PLAY_IN' || m.round?.toLowerCase().includes('play-in')
+    (m) =>
+      m.stage === 'PLAY_IN' ||
+      m.round?.toLowerCase().includes('play-in') ||
+      m.round?.toLowerCase().includes('preliminary')
   );
   const roundOf16Matches = knockoutMatches.filter(
     (m) =>
       m.stage === 'KNOCKOUT' &&
+      !m.round?.toLowerCase().includes('preliminary') &&
       (m.round?.toLowerCase().includes('round of 16') || m.round?.toLowerCase().includes('pre-quarter'))
   );
   const qfMatches = knockoutMatches.filter(
-    (m) => m.stage === 'KNOCKOUT' && m.round?.toLowerCase().includes('quarter')
+    (m) => m.stage === 'KNOCKOUT' && !m.round?.toLowerCase().includes('preliminary') && m.round?.toLowerCase().includes('quarter')
   );
   const sfMatches = knockoutMatches.filter(
-    (m) => m.stage === 'KNOCKOUT' && m.round?.toLowerCase().includes('semi')
+    (m) => m.stage === 'KNOCKOUT' && !m.round?.toLowerCase().includes('preliminary') && m.round?.toLowerCase().includes('semi')
   );
   const finalMatches = knockoutMatches.filter(
     (m) =>
       m.stage === 'KNOCKOUT' &&
+      !m.round?.toLowerCase().includes('preliminary') &&
       m.round?.toLowerCase().includes('final') &&
       !m.round?.toLowerCase().includes('semi') &&
       !m.round?.toLowerCase().includes('quarter')
   );
+
+  const directQualifiersList: string[] = [];
+  if (playInMatches.length > 0) {
+    const targetMainMatchIds = new Set(playInMatches.map((m) => m.nextMatchId).filter(Boolean));
+    knockoutMatches.forEach((m) => {
+      if (targetMainMatchIds.has(m.id)) {
+        if (m.sideAId && m.sideAId !== 'TBD' && !m.sideAName?.startsWith('Winner')) {
+          directQualifiersList.push(m.sideAName);
+        }
+        if (m.sideBId && m.sideBId !== 'TBD' && !m.sideBName?.startsWith('Winner')) {
+          directQualifiersList.push(m.sideBName);
+        }
+      }
+    });
+  }
 
   // Fallback round grouping if custom names were used
   const roundsMap = new Map<string, Match[]>();
@@ -108,7 +128,7 @@ export const VisualBracketTree: React.FC<VisualBracketTreeProps> = ({ matches, o
   });
 
   const structuredRounds = [
-    { title: 'PLAY-IN ROUND', matches: playInMatches, color: 'text-purple-400 border-purple-500/30' },
+    { title: playInMatches.some(m => m.round?.toLowerCase().includes('preliminary')) ? 'PRELIMINARY ROUND' : 'PLAY-IN ROUND', matches: playInMatches, color: 'text-amber-400 border-amber-500/30' },
     { title: 'ROUND OF 16', matches: roundOf16Matches, color: 'text-indigo-400 border-indigo-500/30' },
     { title: 'QUARTER FINALS', matches: qfMatches, color: 'text-brand-400 border-brand-500/30' },
     { title: 'SEMI FINALS', matches: sfMatches, color: 'text-accent-cyan border-accent-cyan/30' },
@@ -137,6 +157,22 @@ export const VisualBracketTree: React.FC<VisualBracketTreeProps> = ({ matches, o
         <span>👈 Scroll horizontally to view full bracket tree</span>
         <span className="text-brand-400 font-mono">SWIPE</span>
       </div>
+
+      {/* Direct to Main Bracket Banner */}
+      {directQualifiersList.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2.5 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs">
+          <span className="text-emerald-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+            🛡️ Direct to Main Bracket:
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {directQualifiersList.map((name, idx) => (
+              <span key={idx} className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
+                {name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Bracket Canvas Container */}
       <div className="overflow-x-auto pb-8 pt-2">

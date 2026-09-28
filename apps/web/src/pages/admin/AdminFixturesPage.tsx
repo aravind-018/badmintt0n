@@ -1328,7 +1328,17 @@ export const AdminFixturesPage: React.FC = () => {
                           <>
                             <div className="flex justify-between"><span className="text-slate-400">Format:</span><span className="font-extrabold text-accent-cyan">Knockout Only</span></div>
                             <div className="flex justify-between"><span className="text-slate-400">Total Teams:</span><span className="font-bold text-white">{generatorPreview.totalTeams}</span></div>
-                            <div className="flex justify-between"><span className="text-slate-400">Bracket:</span><span className="font-bold text-white">{generatorPreview.knockoutStructure}</span></div>
+                            {generatorPreview.targetBracket && (
+                              <div className="flex justify-between"><span className="text-slate-400">Target Bracket:</span><span className="font-bold text-white">{generatorPreview.targetBracket}</span></div>
+                            )}
+                            {generatorPreview.preliminaryMatches > 0 && (
+                              <>
+                                <div className="flex justify-between"><span className="text-slate-400">Preliminary Matches:</span><span className="font-bold text-amber-400">{generatorPreview.preliminaryMatches} matches</span></div>
+                                <div className="flex justify-between"><span className="text-slate-400">Direct to Main Bracket:</span><span className="font-bold text-emerald-400">{generatorPreview.directQualifiers} teams</span></div>
+                                <div className="flex justify-between"><span className="text-slate-400">Main Bracket:</span><span className="font-bold text-cyan-400">{generatorPreview.mainBracketTeams} teams</span></div>
+                              </>
+                            )}
+                            <div className="flex justify-between"><span className="text-slate-400">Structure:</span><span className="font-extrabold text-amber-400">{generatorPreview.knockoutStructure}</span></div>
                           </>
                         )}
                         {selectedFormat === 'ROUND_ROBIN' && (

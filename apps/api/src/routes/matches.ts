@@ -13,7 +13,7 @@ import {
   Participant,
   QualifiedSlot,
 } from '../utils/fixtureGenerator';
-import { validateGroupKnockoutConfig, isPowerOfTwo, getKnockoutRoundName } from '@badminton-live/shared';
+import { validateGroupKnockoutConfig, isPowerOfTwo, getNextPowerOfTwo, getKnockoutRoundName } from '@badminton-live/shared';
 import { logAudit } from '../utils/audit';
 
 export const matchRouter = Router();
@@ -694,13 +694,51 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
   }
 
   if (format === 'KNOCKOUT') {
+    if (totalTeams < 2) {
+      res.json({
+        preview: {
+          tournamentFormat: 'KNOCKOUT',
+          categoryType,
+          totalTeams,
+          totalEligible: totalTeams,
+          totalExcluded: excluded.length,
+          numberOfGroups: 0,
+          groups: [],
+          totalGroupMatches: 0,
+          qualificationRule: 'N/A (Knockout)',
+          expectedQualified: totalTeams,
+          knockoutStructure: 'Knockout Bracket',
+          eligibleList: participants.map((p) => p.name),
+          fixturesExist: existingMatchesCount > 0,
+          existingMatchesCount,
+          isValid: false,
+          validationError: 'At least 2 eligible teams are required for a knockout tournament.',
+        },
+      });
+      return;
+    }
+
+    const targetBracket = getNextPowerOfTwo(totalTeams);
+    const preliminaryMatches = totalTeams === targetBracket ? 0 : totalTeams - targetBracket / 2;
+    const preliminaryParticipants = preliminaryMatches * 2;
+    const directQualifiers = totalTeams - preliminaryParticipants;
+    const mainBracketTeams = preliminaryMatches + directQualifiers;
     const isPower = isPowerOfTwo(totalTeams);
-    const roundName = getKnockoutRoundName(totalTeams);
+    const roundName = getKnockoutRoundName(isPower ? totalTeams : targetBracket / 2);
+
+    const knockoutStructure = isPower
+      ? `${roundName} (${totalTeams} teams) → Grand Final`
+      : `${preliminaryMatches} Preliminary ${preliminaryMatches === 1 ? 'Match' : 'Matches'} → ${roundName} (${mainBracketTeams} teams) → Grand Final`;
+
     res.json({
       preview: {
         tournamentFormat: 'KNOCKOUT',
         categoryType,
         totalTeams,
+        targetBracket,
+        preliminaryMatches,
+        directQualifiers,
+        mainBracketTeams,
         totalEligible: totalTeams,
         totalExcluded: excluded.length,
         numberOfGroups: 0,
@@ -708,12 +746,12 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
         totalGroupMatches: 0,
         qualificationRule: 'N/A (Knockout)',
         expectedQualified: totalTeams,
-        knockoutStructure: isPower ? `${roundName} (${totalTeams} teams) → Grand Final` : `Knockout Bracket (${totalTeams} teams)`,
-        eligibleList: participants.map(p => p.name),
+        knockoutStructure,
+        eligibleList: participants.map((p) => p.name),
         fixturesExist: existingMatchesCount > 0,
         existingMatchesCount,
-        isValid: totalTeams >= 2,
-        validationError: totalTeams < 2 ? 'At least 2 eligible teams are required for Knockout format.' : null,
+        isValid: true,
+        validationError: null,
       },
     });
     return;
@@ -935,15 +973,108 @@ matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADM
         return [...createdGroupMatches, ...createdKnockoutMatches];
       } else {
         // ── KNOCKOUT ONLY ──
-        const dummyPairs: { sideA: Participant; sideB: Participant }[] = [];
-        for (let i = 0; i < participants.length; i += 2) {
-          dummyPairs.push({
-            sideA: participants[i],
-            sideB: participants[i + 1] || { id: 'TBD', name: 'TBD', type: 'PLAYER' },
-          });
+        const targetBracket = getNextPowerOfTwo(totalTeams);
+        const preliminaryMatches = totalTeams === targetBracket ? 0 : totalTeams - targetBracket / 2;
+        const preliminaryParticipants = preliminaryMatches * 2;
+        const directQualifiers = totalTeams - preliminaryParticipants;
+
+        if (
+          preliminaryParticipants + directQualifiers !== totalTeams ||
+          preliminaryMatches + directQualifiers !== targetBracket / 2
+        ) {
+          throw new Error(`Invalid knockout bracket calculation for ${totalTeams} teams.`);
         }
-        const createdKnockoutMatches = await createKnockoutMatchesInTx(tx, tournamentId, categoryId, dummyPairs);
-        return createdKnockoutMatches;
+
+        if (preliminaryMatches === 0) {
+          // Power-of-two team count
+          const dummyPairs: { sideA: Participant; sideB: Participant }[] = [];
+          for (let i = 0; i < participants.length; i += 2) {
+            dummyPairs.push({
+              sideA: participants[i],
+              sideB: participants[i + 1] || { id: 'TBD', name: 'TBD', type: 'PLAYER' },
+            });
+          }
+          const createdKnockoutMatches = await createKnockoutMatchesInTx(tx, tournamentId, categoryId, dummyPairs);
+          return createdKnockoutMatches;
+        } else {
+          // Non-power-of-two team count with Preliminary Round
+          const mainBracketTeamsCount = targetBracket / 2;
+          const directTeams = participants.slice(0, directQualifiers);
+          const prelimTeams = participants.slice(directQualifiers);
+
+          // Build seededPairs for Round 1 of Main Bracket
+          const mainSeededPairs: { sideA: Participant; sideB: Participant }[] = [];
+          const numRound1Matches = mainBracketTeamsCount / 2;
+
+          for (let m = 0; m < numRound1Matches; m++) {
+            const slotAIdx = m * 2;
+            const slotBIdx = m * 2 + 1;
+
+            const sideA =
+              slotAIdx < directQualifiers
+                ? directTeams[slotAIdx]
+                : {
+                    id: 'TBD',
+                    name: `Winner Preliminary Match ${slotAIdx - directQualifiers + 1}`,
+                    type: 'PLAYER' as const,
+                  };
+
+            const sideB =
+              slotBIdx < directQualifiers
+                ? directTeams[slotBIdx]
+                : {
+                    id: 'TBD',
+                    name: `Winner Preliminary Match ${slotBIdx - directQualifiers + 1}`,
+                    type: 'PLAYER' as const,
+                  };
+
+            mainSeededPairs.push({ sideA, sideB });
+          }
+
+          // Generate Main Bracket matches
+          const createdMainMatches = await createKnockoutMatchesInTx(tx, tournamentId, categoryId, mainSeededPairs);
+
+          // Get Round 1 Main Bracket matches sorted by matchNumber
+          const round1MainMatches = createdMainMatches
+            .filter((m) => m.roundNumber === 1)
+            .sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0));
+
+          // Generate Preliminary Round matches
+          const createdPrelimMatches: any[] = [];
+          for (let p = 0; p < preliminaryMatches; p++) {
+            const teamA = prelimTeams[p];
+            const teamB = prelimTeams[prelimTeams.length - 1 - p];
+
+            const slotIndex = directQualifiers + p;
+            const mainMatchIndex = Math.floor(slotIndex / 2);
+            const mainMatchSlot = slotIndex % 2 === 0 ? 'A' : 'B';
+            const targetMainMatch = round1MainMatches[mainMatchIndex];
+
+            const prelimMatchData = {
+              tournamentId: String(tournamentId),
+              categoryId: String(categoryId),
+              stage: 'KNOCKOUT',
+              round: 'Preliminary Round',
+              roundNumber: 0,
+              matchNumber: p + 1,
+              bracketPosition: p + 1,
+              sideAType: teamA.type,
+              sideAId: teamA.id,
+              sideAName: teamA.name,
+              sideBType: teamB.type,
+              sideBId: teamB.id,
+              sideBName: teamB.name,
+              status: 'SCHEDULED' as const,
+              nextMatchId: targetMainMatch ? targetMainMatch.id : null,
+              nextMatchSlot: mainMatchSlot,
+            };
+
+            const created = await tx.match.create({ data: prelimMatchData });
+            createdPrelimMatches.push(created);
+          }
+
+          return [...createdPrelimMatches, ...createdMainMatches];
+        }
       }
     });
 

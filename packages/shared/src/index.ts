@@ -115,6 +115,18 @@ export function isPowerOfTwo(value: number): boolean {
 }
 
 /**
+ * Calculates the smallest power of 2 greater than or equal to teamCount.
+ */
+export function getNextPowerOfTwo(teamCount: number): number {
+  if (teamCount <= 0) return 1;
+  let power = 1;
+  while (power < teamCount) {
+    power *= 2;
+  }
+  return power;
+}
+
+/**
  * Returns human-readable round name from knockout bracket size.
  */
 export function getKnockoutRoundName(knockoutSize: number): string {
