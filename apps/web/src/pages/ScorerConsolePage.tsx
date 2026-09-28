@@ -284,21 +284,21 @@ export const ScorerConsolePage: React.FC = () => {
   const isScheduled = matchData?.status === 'SCHEDULED' || matchData?.status === 'READY';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-none font-sans">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-none font-sans overflow-x-hidden w-full max-w-full">
       {/* Top Console Header */}
-      <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md px-4 py-3 sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/admin')} className="text-slate-400 hover:text-white p-1 rounded-lg">
+      <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md px-3 sm:px-4 py-2.5 sm:py-3 sticky top-0 z-40 w-full">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <button onClick={() => navigate('/admin')} className="text-slate-400 hover:text-white p-1 rounded-lg shrink-0">
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] sm:text-xs font-bold text-amber-400 uppercase tracking-wider truncate">
                   {matchData?.court?.name || 'Court Scorer Console'}
                 </span>
                 <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  className={`text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full shrink-0 ${
                     isMatchComplete
                       ? 'bg-slate-800 text-slate-400'
                       : scoringState?.status === 'LIVE'
@@ -309,21 +309,21 @@ export const ScorerConsolePage: React.FC = () => {
                   {matchData?.status || 'SCHEDULED'}
                 </span>
               </div>
-              <h1 className="text-base font-extrabold text-white truncate max-w-xs sm:max-w-md">
+              <h1 className="text-xs sm:text-base font-extrabold text-white truncate max-w-full">
                 {matchData?.category?.type?.replace('_', ' ') || 'Badminton Match'} • {matchData?.round || 'Round 1'}
               </h1>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center w-full sm:w-auto min-w-0">
             {/* Match Selector Dropdown */}
             <select
               value={selectedMatchId}
               onChange={(e) => setSelectedMatchId(e.target.value)}
-              className="py-1.5 px-3 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:outline-none cursor-pointer"
+              className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs font-semibold focus:outline-none cursor-pointer w-full sm:max-w-xs truncate"
             >
               {matches.map((m) => {
-                const prefix = m.status === 'LIVE' ? '🔴 LIVE: ' : m.status === 'COMPLETED' ? '✓ COMPLETED: ' : '📅 ';
+                const prefix = m.status === 'LIVE' ? '🔴 ' : m.status === 'COMPLETED' ? '✓ ' : '📅 ';
                 return (
                   <option key={m.id} value={m.id}>
                     {prefix}{m.sideAName} vs {m.sideBName} ({m.round})
@@ -345,7 +345,7 @@ export const ScorerConsolePage: React.FC = () => {
           No match selected. Please choose a court match.
         </div>
       ) : (
-        <main className="flex-1 max-w-5xl w-full mx-auto p-4 flex flex-col justify-between gap-6">
+        <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-4 flex flex-col justify-between gap-4 sm:gap-6 overflow-x-hidden">
           {/* Status & Deuce Indicator Banner */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400">
             <div className="flex items-center gap-2">
@@ -491,27 +491,27 @@ export const ScorerConsolePage: React.FC = () => {
 
           {/* Live Serving & Service Court Status Box */}
           {scoringState?.servingState && (
-            <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-slate-900/90 border border-slate-800 p-3 sm:p-4 rounded-2xl flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 sm:gap-4 max-w-full overflow-hidden">
               {/* Serving Metadata */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs w-full md:w-auto flex-1">
-                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-amber-400 block tracking-wider">CURRENT SERVER</span>
-                  <span className="font-extrabold text-white text-sm truncate block mt-0.5" title={scoringState.servingState.serverName}>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-xs w-full lg:w-auto flex-1">
+                <div className="bg-slate-950/80 p-2 sm:p-2.5 rounded-xl border border-slate-800 min-w-0">
+                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-amber-400 block tracking-wider truncate">CURRENT SERVER</span>
+                  <span className="font-extrabold text-white text-xs sm:text-sm truncate block mt-0.5" title={scoringState.servingState.serverName}>
                     {scoringState.servingState.serverName || 'TBD'}
                   </span>
                 </div>
 
-                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-indigo-400 block tracking-wider">TEAM</span>
-                  <span className="font-extrabold text-white text-sm truncate block mt-0.5" title={scoringState.servingState.servingTeamName}>
+                <div className="bg-slate-950/80 p-2 sm:p-2.5 rounded-xl border border-slate-800 min-w-0">
+                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-indigo-400 block tracking-wider truncate">TEAM</span>
+                  <span className="font-extrabold text-white text-xs sm:text-sm truncate block mt-0.5" title={scoringState.servingState.servingTeamName}>
                     {scoringState.servingState.servingTeamName || 'Team'}
                   </span>
                 </div>
 
-                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-emerald-400 block tracking-wider">SERVICE COURT</span>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className={`px-2 py-0.5 rounded-md font-black text-xs ${
+                <div className="bg-slate-950/80 p-2 sm:p-2.5 rounded-xl border border-slate-800 min-w-0">
+                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-emerald-400 block tracking-wider truncate">SERVICE COURT</span>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    <span className={`px-1.5 sm:px-2 py-0.5 rounded-md font-black text-[10px] sm:text-xs ${
                       scoringState.servingState.serviceCourt === 'RIGHT'
                         ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
                         : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
@@ -524,29 +524,29 @@ export const ScorerConsolePage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">RECEIVER</span>
-                  <span className="font-extrabold text-slate-200 text-sm truncate block mt-0.5" title={scoringState.servingState.receiverName}>
+                <div className="bg-slate-950/80 p-2 sm:p-2.5 rounded-xl border border-slate-800 min-w-0">
+                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block tracking-wider truncate">RECEIVER</span>
+                  <span className="font-extrabold text-slate-200 text-xs sm:text-sm truncate block mt-0.5" title={scoringState.servingState.receiverName}>
                     {scoringState.servingState.receiverName || 'TBD'}
                   </span>
                 </div>
               </div>
 
               {/* Visual Badminton Court Diagrams (Side A vs Side B Service Courts) */}
-              <div className="w-full md:w-auto bg-emerald-950/30 border border-emerald-500/30 p-3 rounded-xl flex items-center justify-center gap-3">
+              <div className="w-full lg:w-auto bg-emerald-950/30 border border-emerald-500/30 p-2.5 sm:p-3 rounded-xl flex items-center justify-center gap-3 overflow-x-auto">
                 <div className="text-center">
                   <div className="text-[9px] font-bold text-slate-400 mb-1">BADMINTON COURT</div>
-                  <div className="flex items-center gap-1 bg-emerald-900/40 p-2 rounded-lg border border-emerald-500/40 text-[10px] font-bold">
+                  <div className="flex items-center gap-1 bg-emerald-900/40 p-1.5 sm:p-2 rounded-lg border border-emerald-500/40 text-[10px] font-bold">
                     {/* Side A Court Half */}
-                    <div className="grid grid-cols-2 gap-1 w-24">
-                      <div className={`p-1.5 rounded text-center truncate ${
+                    <div className="grid grid-cols-2 gap-1 w-20 sm:w-24">
+                      <div className={`p-1 sm:p-1.5 rounded text-center truncate ${
                         scoringState.servingState.servingSide === 'A' && scoringState.servingState.serviceCourt === 'LEFT'
                           ? 'bg-amber-400 text-slate-950 font-black animate-pulse'
                           : 'bg-emerald-800/40 text-emerald-200'
                       }`}>
                         LEFT
                       </div>
-                      <div className={`p-1.5 rounded text-center truncate ${
+                      <div className={`p-1 sm:p-1.5 rounded text-center truncate ${
                         scoringState.servingState.servingSide === 'A' && scoringState.servingState.serviceCourt === 'RIGHT'
                           ? 'bg-amber-400 text-slate-950 font-black animate-pulse'
                           : 'bg-emerald-800/40 text-emerald-200'
@@ -556,18 +556,18 @@ export const ScorerConsolePage: React.FC = () => {
                     </div>
 
                     {/* NET */}
-                    <div className="w-1.5 h-10 bg-slate-300/80 rounded" title="NET" />
+                    <div className="w-1 sm:w-1.5 h-8 sm:h-10 bg-slate-300/80 rounded shrink-0" title="NET" />
 
                     {/* Side B Court Half */}
-                    <div className="grid grid-cols-2 gap-1 w-24">
-                      <div className={`p-1.5 rounded text-center truncate ${
+                    <div className="grid grid-cols-2 gap-1 w-20 sm:w-24">
+                      <div className={`p-1 sm:p-1.5 rounded text-center truncate ${
                         scoringState.servingState.servingSide === 'B' && scoringState.servingState.serviceCourt === 'RIGHT'
                           ? 'bg-amber-400 text-slate-950 font-black animate-pulse'
                           : 'bg-emerald-800/40 text-emerald-200'
                       }`}>
                         RIGHT
                       </div>
-                      <div className={`p-1.5 rounded text-center truncate ${
+                      <div className={`p-1 sm:p-1.5 rounded text-center truncate ${
                         scoringState.servingState.servingSide === 'B' && scoringState.servingState.serviceCourt === 'LEFT'
                           ? 'bg-amber-400 text-slate-950 font-black animate-pulse'
                           : 'bg-emerald-800/40 text-emerald-200'
