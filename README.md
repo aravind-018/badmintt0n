@@ -207,11 +207,3 @@ docker compose exec api npx prisma migrate deploy --schema=/app/packages/databas
 
 ---
 
-## 16. Creating the First Tournament
-1. Log in at `http://localhost/login` using `admin@badminton.live` / `AdminPassword123!`.
-2. Navigate to **Admin Dashboard → Tournaments** (`/admin/tournaments`).
-3. Click **+ Create Tournament**, fill in Name, Venue, Start/End Dates, Format, and Courts.
-4. Add Categories (`/admin/categories`) e.g., Men's Singles, Women's Doubles.
-5. Add Courts (`/admin/courts`) e.g., Court 1 (Center Court).
-6. Generate Knockout Bracket or Round Robin fixtures (`/admin/fixtures`).
-7. Assign a Scorer (`/scorer`) to start live scoring!
