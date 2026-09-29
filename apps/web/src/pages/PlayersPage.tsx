@@ -9,6 +9,7 @@ interface Player {
   ranking?: number;
   teamId?: string;
   team?: { id: string; name: string };
+  teamPlayers?: Array<{ team?: { id: string; name: string }; teamId?: string }>;
 }
 
 export const PlayersPage: React.FC = () => {
@@ -29,8 +30,9 @@ export const PlayersPage: React.FC = () => {
   }, []);
 
   const filteredPlayers = players.filter((p) => {
+    const teamName = p.team?.name || p.teamPlayers?.[0]?.team?.name || '';
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.team?.name && p.team.name.toLowerCase().includes(search.toLowerCase()));
+      (teamName && teamName.toLowerCase().includes(search.toLowerCase()));
     const matchesGender = genderFilter ? p.gender === genderFilter : true;
     return matchesSearch && matchesGender;
   });
@@ -78,44 +80,53 @@ export const PlayersPage: React.FC = () => {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
-            {filteredPlayers.map((player) => (
-              <div key={player.id} className="pub-card" style={{ padding: '1.1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(147,51,234,0.2))',
-                    border: '1px solid rgba(59,130,246,0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.2rem',
-                    flexShrink: 0,
-                  }}
-                >
-                  🏸
-                </div>
+            {filteredPlayers.map((player) => {
+              const teamName = player.team?.name || player.teamPlayers?.[0]?.team?.name;
+              return (
+                <div key={player.id} className="pub-card" style={{ padding: '1.1rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(147,51,234,0.2))',
+                      border: '1px solid rgba(59,130,246,0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '1.2rem',
+                      flexShrink: 0,
+                    }}
+                  >
+                    🏸
+                  </div>
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {player.name}
-                    </h3>
-                    {player.seed && (
-                      <span style={{ background: 'rgba(245,158,11,0.2)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)', padding: '0.05rem 0.4rem', borderRadius: 100, fontSize: '0.65rem', fontWeight: 700 }}>
-                        Seed #{player.seed}
-                      </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {player.name}
+                      </h3>
+                      {player.seed && (
+                        <span style={{ background: 'rgba(245,158,11,0.2)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)', padding: '0.05rem 0.4rem', borderRadius: 100, fontSize: '0.65rem', fontWeight: 700 }}>
+                          Seed #{player.seed}
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.2rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <span>🛡️</span>
+                      <span>{teamName || 'No Team'}</span>
+                    </div>
+
+                    {player.ranking && (
+                      <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.2rem', fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)' }}>
+                        <span>⭐ Rank #{player.ranking}</span>
+                      </div>
                     )}
                   </div>
-
-                  <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.25rem', fontSize: '0.78rem', color: 'rgba(255,255,255,0.45)' }}>
-                    {player.team?.name && <span>🛡️ {player.team.name}</span>}
-                    {player.ranking && <span>⭐ Rank #{player.ranking}</span>}
-                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
