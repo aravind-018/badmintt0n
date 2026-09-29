@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { PublicLayout } from '../components/PublicLayout';
 
+interface TeamPlayerLink {
+  id?: string;
+  player?: { id: string; name: string };
+}
+
 interface Team {
   id: string;
   name: string;
@@ -9,6 +14,7 @@ interface Team {
   captain?: string;
   contact?: string;
   players?: any[];
+  teamPlayers?: TeamPlayerLink[];
   _count?: { players: number };
 }
 
@@ -30,7 +36,8 @@ export const TeamsPage: React.FC = () => {
 
   const filteredTeams = teams.filter((t) =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
-    (t.organization && t.organization.toLowerCase().includes(search.toLowerCase()))
+    (t.organization && t.organization.toLowerCase().includes(search.toLowerCase())) ||
+    (t.teamPlayers && t.teamPlayers.some((tp) => tp.player?.name.toLowerCase().includes(search.toLowerCase())))
   );
 
   return (
@@ -66,38 +73,69 @@ export const TeamsPage: React.FC = () => {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem' }}>
-            {filteredTeams.map((team) => (
-              <div key={team.id} className="pub-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                  <div
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 12,
-                      background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(168,85,247,0.2))',
-                      border: '1px solid rgba(99,102,241,0.3)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '1.4rem',
-                    }}
-                  >
-                    🛡️
+            {filteredTeams.map((team) => {
+              const playerNames = (team.teamPlayers && team.teamPlayers.length > 0)
+                ? team.teamPlayers.map((tp) => tp.player?.name).filter((name): name is string => Boolean(name))
+                : (team.players || []).map((p) => typeof p === 'string' ? p : p?.name).filter((name): name is string => Boolean(name));
+
+              return (
+                <div key={team.id} className="pub-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                    <div
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 12,
+                        background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(168,85,247,0.2))',
+                        border: '1px solid rgba(99,102,241,0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.4rem',
+                      }}
+                    >
+                      🛡️
+                    </div>
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>{team.name}</h3>
+                      {team.organization && (
+                        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.45)' }}>{team.organization}</span>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>{team.name}</h3>
-                    {team.organization && (
-                      <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.45)' }}>{team.organization}</span>
+
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
+                    {team.captain && <div>👑 Captain: <span style={{ color: '#fff', fontWeight: 600 }}>{team.captain}</span></div>}
+                    
+                    {playerNames.length > 0 ? (
+                      <div style={{ marginTop: '0.2rem' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.45)', marginBottom: '0.3rem', fontWeight: 600 }}>PLAYERS</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                          {playerNames.map((pName, idx) => (
+                            <span
+                              key={idx}
+                              style={{
+                                background: 'rgba(255,255,255,0.06)',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                color: '#e2e8f0',
+                                padding: '0.2rem 0.5rem',
+                                borderRadius: '6px',
+                                fontSize: '0.78rem',
+                                fontWeight: 500,
+                              }}
+                            >
+                              👤 {pName}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      team._count && <div>👥 Registered Players: <span style={{ color: '#fff', fontWeight: 600 }}>{team._count.players}</span></div>
                     )}
                   </div>
                 </div>
-
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.85rem', color: 'rgba(255,255,255,0.6)' }}>
-                  {team.captain && <div>👑 Captain: <span style={{ color: '#fff', fontWeight: 600 }}>{team.captain}</span></div>}
-                  {team._count && <div>👥 Registered Players: <span style={{ color: '#fff', fontWeight: 600 }}>{team._count.players}</span></div>}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
