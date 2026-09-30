@@ -309,7 +309,8 @@ export async function createKnockoutMatchesInTx(
   // Build rounds from Final (numRounds) down to Round 1
   for (let r = numRounds; r >= 1; r--) {
     const matchesInRoundCount = Math.pow(2, numRounds - r);
-    const roundName = getKnockoutRoundName(Math.pow(2, numRounds - r + 1));
+    const roundKnockoutSize = Math.pow(2, numRounds - r + 1);
+    const roundBaseName = getKnockoutRoundName(roundKnockoutSize);
     matchesByRound[r] = [];
 
     for (let m = 1; m <= matchesInRoundCount; m++) {
@@ -325,10 +326,36 @@ export async function createKnockoutMatchesInTx(
         }
       }
 
+      // Determine round display name for this match
+      let matchRoundName = roundBaseName;
+      if (roundKnockoutSize === 4) {
+        matchRoundName = `Semi-Final ${m}`;
+      } else if (roundKnockoutSize === 2) {
+        matchRoundName = 'Grand Final';
+      } else if (matchesInRoundCount > 1) {
+        const singularName = roundBaseName.replace(/s$/, '');
+        matchRoundName = `${singularName} ${m}`;
+      }
+
+      // Default placeholder labels for downstream rounds using dynamic feeder match names
       let sideA: { id: string; name: string; type: 'TEAM' | 'PLAYER' } = { id: 'TBD', name: 'TBD', type: 'PLAYER' };
       let sideB: { id: string; name: string; type: 'TEAM' | 'PLAYER' } = { id: 'TBD', name: 'TBD', type: 'PLAYER' };
 
-      if (r === 1) {
+      if (r > 1) {
+        const feederRoundSize = Math.pow(2, numRounds - (r - 1) + 1);
+        const feederBaseName = getKnockoutRoundName(feederRoundSize);
+        const feederSingular = feederRoundSize === 4 ? 'Semi-Final' : feederBaseName.replace(/ Finals$/, '-Final').replace(/s$/, '');
+        sideA = {
+          id: 'TBD',
+          name: `Winner of ${feederSingular} ${2 * m - 1}`,
+          type: 'PLAYER',
+        };
+        sideB = {
+          id: 'TBD',
+          name: `Winner of ${feederSingular} ${2 * m}`,
+          type: 'PLAYER',
+        };
+      } else if (r === 1) {
         const pair = seededPairs[m - 1];
         if (pair) {
           sideA = { id: pair.sideA.id || 'TBD', name: pair.sideA.name || 'TBD', type: pair.sideA.type };
@@ -340,7 +367,7 @@ export async function createKnockoutMatchesInTx(
         tournamentId,
         categoryId,
         stage: 'KNOCKOUT',
-        round: roundName,
+        round: matchRoundName,
         roundNumber: r,
         matchNumber: m,
         bracketPosition: m,

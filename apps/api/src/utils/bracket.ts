@@ -39,13 +39,18 @@ export async function advanceBracketWinner(matchId: string) {
       // If match is no longer finished (reverted to SCHEDULED/LIVE/etc), reset downstream slot if next match is not completed
       const nextMatch = await prisma.match.findUnique({ where: { id: match.nextMatchId } });
       if (nextMatch && nextMatch.status === 'SCHEDULED') {
+        const placeholderName = match.round
+          ? match.round.startsWith('Winner')
+            ? match.round
+            : `Winner of ${match.round}`
+          : 'TBD';
         const resetUpdate: any = {};
         if (match.nextMatchSlot === 'A' && nextMatch.sideAId !== 'TBD') {
           resetUpdate.sideAId = 'TBD';
-          resetUpdate.sideAName = 'TBD';
+          resetUpdate.sideAName = placeholderName;
         } else if (match.nextMatchSlot === 'B' && nextMatch.sideBId !== 'TBD') {
           resetUpdate.sideBId = 'TBD';
-          resetUpdate.sideBName = 'TBD';
+          resetUpdate.sideBName = placeholderName;
         }
         if (Object.keys(resetUpdate).length > 0) {
           await prisma.match.update({

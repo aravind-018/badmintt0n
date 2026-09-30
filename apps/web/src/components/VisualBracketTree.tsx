@@ -49,7 +49,7 @@ export function formatBracketParticipant(
     if (id && id !== 'TBD' && !lower.startsWith('qualified') && !lower.startsWith('winner')) {
       return { displayName: trimmed, isTBD: false };
     }
-    return { displayName: 'TBD', isTBD: true };
+    return { displayName: trimmed, isTBD: true };
   }
 
   return { displayName: trimmed, isTBD: false };

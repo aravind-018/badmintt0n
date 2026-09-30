@@ -138,6 +138,19 @@ scoringRouter.post(
       }
     }
 
+    // Check if match participants are determined
+    if (
+      !match.sideAId ||
+      match.sideAId === 'TBD' ||
+      !match.sideBId ||
+      match.sideBId === 'TBD' ||
+      match.sideAName?.startsWith('Winner') ||
+      match.sideBName?.startsWith('Winner')
+    ) {
+      res.status(400).json({ error: 'Cannot score a match until both participants are determined.' });
+      return;
+    }
+
     // Check if scoring on a completed match
     if (match.status === 'COMPLETED' || match.status === 'WALKOVER' || match.status === 'RETIRED') {
       if (type === 'POINT_SIDE_A' || type === 'POINT_SIDE_B') {
@@ -264,11 +277,9 @@ scoringRouter.post(
     }
 
     // ─────────────────────────────────────────────────────────
-    // Automatic Knockout Bracket Winner Advancement
+    // Automatic Knockout Bracket Winner Advancement & Sync
     // ─────────────────────────────────────────────────────────
-    if (nextState.isMatchComplete || updatedMatch.status === 'COMPLETED' || updatedMatch.status === 'WALKOVER' || updatedMatch.status === 'RETIRED') {
-      await advanceBracketWinner(matchId);
-    }
+    await advanceBracketWinner(matchId);
 
     // ─────────────────────────────────────────────────────────
     // Audit Logging & Socket.IO Broadcasts

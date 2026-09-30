@@ -299,6 +299,21 @@ matchRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMEN
     return;
   }
 
+  // Ensure match is only playable once both participants are determined
+  if (updateData.status && ['LIVE', 'CALLED', 'READY'].includes(updateData.status)) {
+    if (
+      !newSideAId ||
+      newSideAId === 'TBD' ||
+      !newSideBId ||
+      newSideBId === 'TBD' ||
+      newSideAName?.startsWith('Winner') ||
+      newSideBName?.startsWith('Winner')
+    ) {
+      res.status(400).json({ error: 'Match cannot be played until both participants are determined.' });
+      return;
+    }
+  }
+
   const existingState = (existing.currentGameState as any) || {};
   const newGameState = { ...existingState };
   if (targetPoints !== undefined) newGameState.targetPoints = targetPoints;
@@ -727,7 +742,9 @@ matchRouter.post('/preview-fixtures', authenticateToken, requireRole('SUPER_ADMI
     const roundName = getKnockoutRoundName(isPower ? totalTeams : targetBracket / 2);
 
     const knockoutStructure = isPower
-      ? `${roundName} (${totalTeams} teams) → Grand Final`
+      ? totalTeams === 2
+        ? 'Grand Final (2 teams)'
+        : `${roundName} (${totalTeams} teams) → Grand Final`
       : `${preliminaryMatches} Preliminary ${preliminaryMatches === 1 ? 'Match' : 'Matches'} → ${roundName} (${mainBracketTeams} teams) → Grand Final`;
 
     res.json({
@@ -978,20 +995,37 @@ matchRouter.post('/generate-fixtures', authenticateToken, requireRole('SUPER_ADM
         const preliminaryParticipants = preliminaryMatches * 2;
         const directQualifiers = totalTeams - preliminaryParticipants;
 
+        const expectedMainTeams = totalTeams === targetBracket ? targetBracket : targetBracket / 2;
         if (
           preliminaryParticipants + directQualifiers !== totalTeams ||
-          preliminaryMatches + directQualifiers !== targetBracket / 2
+          preliminaryMatches + directQualifiers !== expectedMainTeams
         ) {
           throw new Error(`Invalid knockout bracket calculation for ${totalTeams} teams.`);
         }
 
         if (preliminaryMatches === 0) {
           // Power-of-two team count
+          let orderedParticipants = [...participants];
+
+          // Requirement 3: If teams are unranked/randomized, shuffle the 4 teams before pairing them.
+          const hasExplicitSeeds = orderedParticipants.some((p: any) => typeof p.seed === 'number' && p.seed > 0);
+          if (!hasExplicitSeeds) {
+            // Fisher-Yates shuffle
+            for (let i = orderedParticipants.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [orderedParticipants[i], orderedParticipants[j]] = [orderedParticipants[j], orderedParticipants[i]];
+            }
+          } else if (orderedParticipants.length === 4) {
+            // If all 4 have seeds, seed 1 vs seed 4, seed 2 vs seed 3
+            orderedParticipants.sort((a: any, b: any) => (a.seed || 99) - (b.seed || 99));
+            orderedParticipants = [orderedParticipants[0], orderedParticipants[3], orderedParticipants[1], orderedParticipants[2]];
+          }
+
           const dummyPairs: { sideA: Participant; sideB: Participant }[] = [];
-          for (let i = 0; i < participants.length; i += 2) {
+          for (let i = 0; i < orderedParticipants.length; i += 2) {
             dummyPairs.push({
-              sideA: participants[i],
-              sideB: participants[i + 1] || { id: 'TBD', name: 'TBD', type: 'PLAYER' },
+              sideA: orderedParticipants[i],
+              sideB: orderedParticipants[i + 1] || { id: 'TBD', name: 'TBD', type: 'PLAYER' },
             });
           }
           const createdKnockoutMatches = await createKnockoutMatchesInTx(tx, tournamentId, categoryId, dummyPairs);

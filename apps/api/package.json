@@ -16,6 +16,7 @@
     "test:phase7": "tsx tests/test-phase7-public.ts",
     "test:phase8": "tsx tests/test-phase8.ts",
     "test:phase9": "tsx tests/test-phase9-comprehensive.ts",
+    "test:knockout-4teams": "tsx tests/test-knockout-4teams.ts",
     "test": "tsx tests/test-phase9-comprehensive.ts",
     "type-check": "tsc --noEmit"
   },

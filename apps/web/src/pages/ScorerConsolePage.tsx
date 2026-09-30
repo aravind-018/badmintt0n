@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Radio, RotateCcw, Pause, Play, CheckCircle2, ArrowLeft, Flag, RefreshCw } from 'lucide-react';
+import { Radio, RotateCcw, Pause, Play, CheckCircle2, ArrowLeft, Flag, RefreshCw, Clock } from 'lucide-react';
 
 export const ScorerConsolePage: React.FC = () => {
   const { matchId } = useParams<{ matchId?: string }>();
@@ -41,8 +41,11 @@ export const ScorerConsolePage: React.FC = () => {
       setMatches(list);
 
       if (list.length > 0 && !selectedMatchId) {
-        // Auto pick first live or scheduled match
-        const activeOrScheduled = list.find((m) => m.status === 'LIVE' || m.status === 'SCHEDULED' || m.status === 'PAUSED') || list[0];
+        // Auto pick first live or playable scheduled match
+        const activeOrScheduled = list.find((m) => {
+          const isTBD = m.sideAId === 'TBD' || m.sideBId === 'TBD' || m.sideAName?.startsWith('Winner') || m.sideBName?.startsWith('Winner');
+          return (m.status === 'LIVE' || m.status === 'PAUSED' || (m.status === 'SCHEDULED' && !isTBD));
+        }) || list[0];
         setSelectedMatchId(activeOrScheduled.id);
       }
     } catch (err) {
@@ -113,7 +116,20 @@ export const ScorerConsolePage: React.FC = () => {
     }
   }, [selectedMatchId]);
 
+  const isMatchPlayable = Boolean(
+    matchData?.sideAId &&
+    matchData?.sideAId !== 'TBD' &&
+    matchData?.sideBId &&
+    matchData?.sideBId !== 'TBD' &&
+    !matchData?.sideAName?.startsWith('Winner') &&
+    !matchData?.sideBName?.startsWith('Winner')
+  );
+
   const handleStartMatch = async () => {
+    if (!isMatchPlayable) {
+      showToast('This match cannot be started until both participants are determined.', 'error');
+      return;
+    }
     if (!selectedServerName) {
       showToast('Please select the starting server before starting the match.', 'error');
       return;
@@ -382,8 +398,21 @@ export const ScorerConsolePage: React.FC = () => {
             </div>
           </div>
 
+          {/* Waiting for preceding matches banner if participants are not yet determined */}
+          {(isScheduled || (scoringState?.status !== 'LIVE' && scoringState?.events?.length === 0)) && !isMatchPlayable && (
+            <div className="bg-slate-900/90 border border-slate-800 p-5 rounded-2xl flex items-center gap-3 text-slate-300 text-sm">
+              <Clock className="w-5 h-5 text-accent-amber shrink-0" />
+              <div>
+                <strong className="text-white block font-bold">Waiting for Preceding Round Matches</strong>
+                <span className="text-slate-400 text-xs mt-0.5 block">
+                  This match cannot start until both participants ({matchData?.sideAName || 'TBD'} &amp; {matchData?.sideBName || 'TBD'}) are determined.
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Match Setup & Starting Server Selection Panel */}
-          {(isScheduled || (scoringState?.status !== 'LIVE' && scoringState?.events?.length === 0)) && (
+          {(isScheduled || (scoringState?.status !== 'LIVE' && scoringState?.events?.length === 0)) && isMatchPlayable && (
             <div className="bg-slate-900/90 border border-amber-500/40 p-5 rounded-2xl space-y-4 shadow-xl">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div>
