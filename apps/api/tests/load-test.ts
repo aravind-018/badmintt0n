@@ -32,6 +32,7 @@ async function runRealisticLoadTest() {
 
   // Map to track send times of score update requests for latency tracking
   const sendTimestamps = new Map<string, number>();
+  const failedReasons = new Map<string, number>();
 
   // --------------------------------------------------------------------------
   // STEP 1: AUTHENTICATE SCORER / ADMIN USER
@@ -77,22 +78,26 @@ async function runRealisticLoadTest() {
       throw new Error('No matches found in database response');
     }
 
-    const liveMatch = matches.find((m: any) => m.status === 'LIVE') || matches[0];
-    targetMatchId = liveMatch.id;
+    // Always create a clean, dedicated test match with targetPoints: 50 for load test
+    const createRes = await fetch(`${API_BASE}/matches`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({
+        tournamentId: matches[0].tournamentId,
+        categoryId: matches[0].categoryId,
+        sideAId: matches[0].sideAId,
+        sideAName: 'Load Test Team Alpha',
+        sideBId: matches[0].sideBId,
+        sideBName: 'Load Test Team Beta',
+        round: 'Load Test Live Stage',
+        status: 'LIVE',
+        targetPoints: 50,
+      }),
+    });
+    const created: any = await createRes.json();
+    targetMatchId = created.match?.id || matches[0].id;
 
-    // Ensure status is LIVE
-    if (liveMatch.status !== 'LIVE') {
-      await fetch(`${API_BASE}/matches/${targetMatchId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ status: 'LIVE' }),
-      });
-    }
-
-    console.log(`  ✅ Target match identified: ${targetMatchId} (${liveMatch.sideAName} vs ${liveMatch.sideBName})\n`);
+    console.log(`  ✅ Target match identified: ${targetMatchId}\n`);
   } catch (err: any) {
     console.error('  ❌ Failed to setup match:', err.message);
     process.exit(1);
@@ -211,12 +216,18 @@ async function runRealisticLoadTest() {
             const duration = Date.now() - reqStart;
             httpTotalRequests++;
             httpLatencies.push(duration);
-            if (res.ok) httpSuccessfulRequests++;
-            else httpFailedRequests++;
+            if (res.ok) {
+              httpSuccessfulRequests++;
+            } else {
+              httpFailedRequests++;
+              const errBody = await res.text();
+              failedReasons.set(`${res.status}: ${errBody}`, (failedReasons.get(`${res.status}: ${errBody}`) || 0) + 1);
+            }
           }
-        } catch (err) {
+        } catch (err: any) {
           httpTotalRequests++;
           httpFailedRequests++;
+          failedReasons.set(`Network: ${err.message}`, (failedReasons.get(`Network: ${err.message}`) || 0) + 1);
         }
 
         // Small pacing delay between requests (40ms)
@@ -296,6 +307,12 @@ async function runRealisticLoadTest() {
   console.log(`🧠 Memory Usage (Heap Start -> End): ${heapUsedStartMb} MB -> ${heapUsedEndMb} MB (Delta: +${heapDeltaMb} MB)`);
   console.log(`🗄️ Database Query Latency:          ${dbLatencyMs} ms`);
   console.log(`❌ Overall Error Rate:               ${errorRate}%`);
+  if (failedReasons.size > 0) {
+    console.log('\n🔍 Failed Request Breakdown:');
+    for (const [reason, count] of failedReasons.entries()) {
+      console.log(`   - [${count}x]: ${reason}`);
+    }
+  }
   console.log('================================================================\n');
 
   process.exit(0);

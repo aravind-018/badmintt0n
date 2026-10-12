@@ -41,8 +41,8 @@ router.use('/api/v1/public', publicRouter);
 // API v1 info root
 router.get('/api/v1', (_req: Request, res: Response) => {
   res.json({
-    name: 'Badminton Live API Server',
-    version: '0.1.0',
+    name: 'Premier League Multi-Sport API Server',
+    version: '2.0.0',
     status: 'online',
     timestamp: new Date().toISOString(),
   });

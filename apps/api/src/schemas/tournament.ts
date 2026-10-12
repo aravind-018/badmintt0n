@@ -14,8 +14,9 @@ export const tournamentBaseSchema = z.object({
   startDate: z.string().refine((val) => !isNaN(Date.parse(val)), 'Invalid start date'),
   endDate: z.string().refine((val) => !isNaN(Date.parse(val)), 'Invalid end date'),
   status: z.enum(['DRAFT', 'PUBLISHED', 'ACTIVE', 'COMPLETED', 'CANCELLED']).default('DRAFT'),
-  format: z.enum(['KNOCKOUT', 'ROUND_ROBIN', 'GROUP_KNOCKOUT']).default('KNOCKOUT'),
-  numberOfCourts: z.number().int().min(1, 'At least 1 court is required').max(64, 'Maximum 64 courts allowed').default(1),
+  sport: z.enum(['BADMINTON', 'CRICKET', 'FOOTBALL', 'CHESS', 'CARROM']).default('BADMINTON'),
+  format: z.enum(['KNOCKOUT', 'ROUND_ROBIN', 'GROUP_KNOCKOUT', 'SWISS']).default('KNOCKOUT'),
+  numberOfCourts: z.number().int().min(1, 'At least 1 court/field/board is required').max(64, 'Maximum 64 venues allowed').default(1),
 });
 
 export const tournamentSchema = tournamentBaseSchema.refine(

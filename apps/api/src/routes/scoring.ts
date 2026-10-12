@@ -1,7 +1,12 @@
 import { Router, Response } from 'express';
 import { prisma } from '@badminton-live/database';
 import { authenticateToken, requireRole, AuthRequest } from '../middleware/auth';
-import { replayMatchEvents, MatchEvent, MatchEventType } from '@badminton-live/scoring';
+import {
+  replaySportMatchEvents,
+  createInitialSportMatchState,
+  applySportMatchEvent,
+  SportType,
+} from '@badminton-live/scoring';
 import { broadcastScoreUpdate, broadcastMatchEvent } from '../socket';
 import { logAudit } from '../utils/audit';
 import { advanceBracketWinner } from '../utils/bracket';
@@ -19,25 +24,90 @@ const scoringEventSchema = z.object({
     'WALKOVER',
     'RETIRE',
     'COMPLETE',
+    // Cricket
+    'BALL_BOWLED',
+    'RUNS_SCORED',
+    'WICKET',
+    'EXTRA',
+    'INNINGS_END',
+    'STRIKE_ROTATE',
+    'NEW_BATTER',
+    'NEW_BOWLER',
+    // Football
+    'PERIOD_START',
+    'PERIOD_END',
+    'GOAL',
+    'CARD_YELLOW',
+    'CARD_RED',
+    'SUBSTITUTION',
+    'PENALTY_SHOOTOUT_KICK',
+    // Chess
+    'MOVE_MADE',
+    'CLOCK_TICK',
+    'DRAW_OFFERED',
+    'AGREE_DRAW',
+    'RESIGNATION',
+    'TIME_OUT',
+    'CHECKMATE',
+    // Carrom
+    'COIN_POCKETED',
+    'QUEEN_POCKETED',
+    'QUEEN_COVERED',
+    'FOUL_PENALTY',
+    'BOARD_COMPLETE',
   ]),
   requestId: z.string().optional(),
   side: z.enum(['A', 'B']).optional(),
+  runs: z.number().int().min(0).max(10).optional(),
+  extraType: z.enum(['WIDE', 'NO_BALL', 'BYE', 'LEG_BYE', 'PENALTY']).optional(),
+  extraRuns: z.number().int().min(0).max(10).optional(),
+  isWicket: z.boolean().optional(),
+  wicketType: z.enum(['BOWLED', 'CAUGHT', 'LBW', 'RUN_OUT', 'STUMPED', 'HIT_WICKET', 'RETIRED']).optional(),
+  newBatterId: z.string().optional(),
+  newBatterName: z.string().optional(),
+  bowlerId: z.string().optional(),
+  bowlerName: z.string().optional(),
+  period: z.any().optional(),
+  minute: z.number().int().min(0).max(180).optional(),
+  addedMinute: z.number().int().min(0).max(30).optional(),
+  scorerName: z.string().optional(),
+  scorerId: z.string().optional(),
+  assistName: z.string().optional(),
+  assistId: z.string().optional(),
+  isPenalty: z.boolean().optional(),
+  isOwnGoal: z.boolean().optional(),
+  playerName: z.string().optional(),
+  playerId: z.string().optional(),
+  cardReason: z.string().optional(),
+  playerOutName: z.string().optional(),
+  playerOutId: z.string().optional(),
+  playerInName: z.string().optional(),
+  playerInId: z.string().optional(),
+  penaltyScored: z.boolean().optional(),
+  penaltyTakerName: z.string().optional(),
+  color: z.enum(['WHITE', 'BLACK']).optional(),
+  san: z.string().optional(),
+  remainingWhiteSeconds: z.number().optional(),
+  remainingBlackSeconds: z.number().optional(),
+  coinColor: z.enum(['WHITE', 'BLACK']).optional(),
+  penaltyCoins: z.number().int().optional(),
+  boardNumber: z.number().int().optional(),
 });
-
-function getMatchTargetPoints(match: any): number {
-  if (match?.currentGameState && typeof match.currentGameState === 'object' && !Array.isArray(match.currentGameState)) {
-    return (match.currentGameState as any).targetPoints || 21;
-  }
-  return 21;
-}
 
 function getMatchMetadata(match: any) {
   const isDoubles = match?.category?.type ? match.category.type.includes('DOUBLES') : false;
   const gameState = match?.currentGameState && typeof match.currentGameState === 'object' ? match.currentGameState : {};
   return {
     isDoubles,
+    sideAId: match?.sideAId,
     sideAName: match?.sideAName || 'Side A',
+    sideBId: match?.sideBId,
     sideBName: match?.sideBName || 'Side B',
+    targetPoints: gameState.targetPoints || 21,
+    maxOvers: gameState.maxOvers || 20,
+    halfDurationMinutes: gameState.halfDurationMinutes || 45,
+    initialTimeMinutes: gameState.initialTimeMinutes || 15,
+    incrementSeconds: gameState.incrementSeconds || 10,
     initialServerName: gameState.initialServerName || match?.initialServerName || undefined,
     initialServingSide: gameState.initialServingSide || match?.initialServingSide || undefined,
   };
@@ -52,6 +122,7 @@ scoringRouter.get('/:id/scoring', async (req, res) => {
     include: {
       category: true,
       court: true,
+      tournament: true,
       games: true,
       events: { orderBy: { createdAt: 'asc' } },
     },
@@ -62,19 +133,25 @@ scoringRouter.get('/:id/scoring', async (req, res) => {
     return;
   }
 
-  // Convert DB match events to Scoring Engine events format
-  const scoringEvents: MatchEvent[] = match.events.map((e) => ({
-    id: e.id,
-    matchId: e.matchId,
-    gameNumber: e.gameNumber,
-    type: e.type as MatchEventType,
-    timestamp: e.createdAt.toISOString(),
-    createdBy: e.scorerId,
-  }));
-
-  const targetPoints = getMatchTargetPoints(match);
+  const matchSport: SportType = (match.sport || match.tournament?.sport || 'BADMINTON') as SportType;
   const metadata = getMatchMetadata(match);
-  const computedState = replayMatchEvents(scoringEvents, targetPoints, metadata);
+
+  // Convert DB match events to Scoring Engine events format
+  const scoringEvents = match.events.map((e) => {
+    const snap = (e.stateSnapshot as any) || {};
+    return {
+      id: e.id,
+      matchId: e.matchId,
+      gameNumber: e.gameNumber,
+      type: e.type,
+      timestamp: e.createdAt.toISOString(),
+      createdBy: e.scorerId,
+      ...snap,
+    };
+  });
+
+  const computedState =
+    match.currentGameState || replaySportMatchEvents(matchSport, scoringEvents, metadata);
 
   res.json({
     match,
@@ -83,7 +160,7 @@ scoringRouter.get('/:id/scoring', async (req, res) => {
   });
 });
 
-// POST /api/v1/matches/:id/events — Post a new point or match action
+// POST /api/v1/matches/:id/events — Post a new scoring or match action
 scoringRouter.post(
   '/:id/events',
   authenticateToken,
@@ -97,7 +174,8 @@ scoringRouter.post(
       return;
     }
 
-    const { type, requestId, side } = result.data;
+    const eventPayload = result.data;
+    const { type, requestId, side } = eventPayload;
     const scorerId = req.user!.id;
 
     // Fetch match and existing events
@@ -107,6 +185,7 @@ scoringRouter.post(
         events: { orderBy: { createdAt: 'asc' } },
         category: true,
         court: true,
+        tournament: true,
         games: true,
       },
     });
@@ -116,24 +195,19 @@ scoringRouter.post(
       return;
     }
 
-    const targetPoints = getMatchTargetPoints(match);
+    const matchSport: SportType = (match.sport || match.tournament?.sport || 'BADMINTON') as SportType;
     const metadata = getMatchMetadata(match);
 
     // Idempotency check using requestId
     if (requestId) {
-      const duplicate = match.events.find((e: any) => e.stateSnapshot && (e.stateSnapshot as any).requestId === requestId);
+      const duplicate = match.events.find(
+        (e: any) => e.stateSnapshot && (e.stateSnapshot as any).requestId === requestId
+      );
       if (duplicate) {
-        // Return existing state without duplicate action
-        const scoringEvents: MatchEvent[] = match.events.map((e) => ({
-          id: e.id,
-          matchId: e.matchId,
-          gameNumber: e.gameNumber,
-          type: e.type as MatchEventType,
-          timestamp: e.createdAt.toISOString(),
-          createdBy: e.scorerId,
-        }));
-        const state = replayMatchEvents(scoringEvents, targetPoints, metadata);
-        res.json({ message: 'Duplicate request ignored', state });
+        res.json({
+          message: 'Duplicate request ignored',
+          state: match.currentGameState || createInitialSportMatchState(matchSport, metadata),
+        });
         return;
       }
     }
@@ -153,63 +227,77 @@ scoringRouter.post(
 
     // Check if scoring on a completed match
     if (match.status === 'COMPLETED' || match.status === 'WALKOVER' || match.status === 'RETIRED') {
-      if (type === 'POINT_SIDE_A' || type === 'POINT_SIDE_B') {
-        res.status(400).json({ error: 'Cannot add points to a completed match.' });
+      if (type !== 'UNDO') {
+        res.status(400).json({ error: 'Cannot add events to a completed match.' });
         return;
       }
     }
 
     // Convert current DB events to engine events
-    const existingEngineEvents: MatchEvent[] = match.events.map((e) => ({
-      id: e.id,
-      matchId: e.matchId,
-      gameNumber: e.gameNumber,
-      type: e.type as MatchEventType,
-      timestamp: e.createdAt.toISOString(),
-      createdBy: e.scorerId,
-    }));
+    const existingEngineEvents = match.events.map((e) => {
+      const snap = (e.stateSnapshot as any) || {};
+      return {
+        id: e.id,
+        matchId: e.matchId,
+        gameNumber: e.gameNumber,
+        type: e.type,
+        timestamp: e.createdAt.toISOString(),
+        createdBy: e.scorerId,
+        ...snap,
+      };
+    });
 
-    // Compute current state prior to new event
-    const currentState = replayMatchEvents(existingEngineEvents, targetPoints, metadata);
-    const currentGameNumber = currentState.currentGameNumber;
+    // Compute current state prior to new event (utilize authoritative currentGameState if present)
+    const currentState: any = match.currentGameState
+      ? match.currentGameState
+      : (existingEngineEvents.length > 0
+          ? replaySportMatchEvents(matchSport, existingEngineEvents, metadata)
+          : createInitialSportMatchState(matchSport, metadata));
+
+    const currentGameNumber = currentState.currentGameNumber || 1;
 
     // Create new event object
-    const newEngineEvent: MatchEvent = {
+    const newEngineEvent = {
       id: 'temp-' + Date.now(),
       matchId,
       gameNumber: currentGameNumber,
-      type: type as MatchEventType,
       timestamp: new Date().toISOString(),
       createdBy: side || scorerId,
+      ...eventPayload,
     };
 
-    let nextState;
+    let nextState: any;
     try {
       if (type === 'UNDO') {
-        const pointEvents = existingEngineEvents.filter(
-          (e) => e.type === 'POINT_SIDE_A' || e.type === 'POINT_SIDE_B'
-        );
-        if (pointEvents.length > 0) {
-          const lastPointEvent = pointEvents[pointEvents.length - 1];
-          // Delete last point event from database
-          await prisma.matchEvent.delete({ where: { id: lastPointEvent.id } });
+        if (existingEngineEvents.length > 0) {
+          const lastEvent = existingEngineEvents[existingEngineEvents.length - 1];
+          await prisma.matchEvent.delete({ where: { id: lastEvent.id } });
         }
-        // Re-fetch remaining events
         const reFetched = await prisma.matchEvent.findMany({
           where: { matchId },
           orderBy: { createdAt: 'asc' },
         });
-        const remainingEvents: MatchEvent[] = reFetched.map((e) => ({
-          id: e.id,
-          matchId: e.matchId,
-          gameNumber: e.gameNumber,
-          type: e.type as MatchEventType,
-          timestamp: e.createdAt.toISOString(),
-          createdBy: e.scorerId,
-        }));
-        nextState = replayMatchEvents(remainingEvents, targetPoints, metadata);
+        const remainingEvents = reFetched.map((e) => {
+          const snap = (e.stateSnapshot as any) || {};
+          return {
+            id: e.id,
+            matchId: e.matchId,
+            gameNumber: e.gameNumber,
+            type: e.type,
+            timestamp: e.createdAt.toISOString(),
+            createdBy: e.scorerId,
+            ...snap,
+          };
+        });
+        nextState = replaySportMatchEvents(matchSport, remainingEvents, metadata);
       } else {
-        nextState = replayMatchEvents([...existingEngineEvents, newEngineEvent], targetPoints, metadata);
+        // Fast incremental state transition using pure sport engine
+        try {
+          nextState = applySportMatchEvent(matchSport, currentState, newEngineEvent, metadata);
+        } catch {
+          // Fallback to full replay if incremental transition fails
+          nextState = replaySportMatchEvents(matchSport, [...existingEngineEvents, newEngineEvent], metadata);
+        }
 
         // Save event to database
         await prisma.matchEvent.create({
@@ -218,7 +306,7 @@ scoringRouter.post(
             gameNumber: currentGameNumber,
             type: type as any,
             scorerId,
-            stateSnapshot: { requestId: requestId || null, type, side },
+            stateSnapshot: { ...eventPayload, requestId: requestId || null },
           },
         });
       }
@@ -232,60 +320,84 @@ scoringRouter.post(
     if (nextState.winner === 'A') winnerId = match.sideAId;
     if (nextState.winner === 'B') winnerId = match.sideBId;
 
+    // Extract sport-specific primary scores
+    let sideAScore = 0;
+    let sideBScore = 0;
+    if (matchSport === 'FOOTBALL') {
+      sideAScore = nextState.sideAGoals || 0;
+      sideBScore = nextState.sideBGoals || 0;
+    } else if (matchSport === 'CRICKET') {
+      sideAScore = nextState.innings1?.totalRuns || 0;
+      sideBScore = nextState.innings2?.totalRuns || 0;
+    } else if (matchSport === 'CHESS') {
+      sideAScore = Math.floor(nextState.sideAPoints || 0);
+      sideBScore = Math.floor(nextState.sideBPoints || 0);
+    } else if (matchSport === 'CARROM') {
+      sideAScore = nextState.sideATotalPoints || 0;
+      sideBScore = nextState.sideBTotalPoints || 0;
+    } else {
+      sideAScore = nextState.sideAGamesWon || 0;
+      sideBScore = nextState.sideBGamesWon || 0;
+    }
+
     // Update Match state in DB
     const updatedMatch = await prisma.match.update({
       where: { id: matchId },
       data: {
         status: nextState.status as any,
-        sideAGamesWon: nextState.sideAGamesWon,
-        sideBGamesWon: nextState.sideBGamesWon,
-        winnerId: winnerId || match.winnerId,
+        sport: matchSport,
+        sideAScore,
+        sideBScore,
+        sideAGamesWon: nextState.sideAGamesWon || 0,
+        sideBGamesWon: nextState.sideBGamesWon || 0,
+        winnerId: winnerId || (nextState.isMatchComplete && nextState.winner ? match.winnerId : null),
         scorerId: match.scorerId || scorerId,
-        currentGameState: { targetPoints, games: nextState.games } as any,
+        currentGameState: nextState as any,
         completedAt: nextState.isMatchComplete ? new Date() : null,
       },
       include: {
         category: true,
         court: true,
+        tournament: true,
         games: true,
       },
     });
 
-    // Sync MatchGame records
-    for (const game of nextState.games) {
-      let gameWinnerId: string | null = null;
-      if (game.winner === 'A') gameWinnerId = match.sideAId;
-      if (game.winner === 'B') gameWinnerId = match.sideBId;
+    // Sync MatchGame records for sets/games based sports (Badminton)
+    if (Array.isArray(nextState.games)) {
+      for (const game of nextState.games) {
+        let gameWinnerId: string | null = null;
+        if (game.winner === 'A') gameWinnerId = match.sideAId;
+        if (game.winner === 'B') gameWinnerId = match.sideBId;
 
-      await prisma.matchGame.upsert({
-        where: { matchId_gameNumber: { matchId, gameNumber: game.gameNumber } },
-        update: {
-          sideAPoints: game.sideAPoints,
-          sideBPoints: game.sideBPoints,
-          winnerId: gameWinnerId,
-          completedAt: game.isComplete ? new Date() : null,
-        },
-        create: {
-          matchId,
-          gameNumber: game.gameNumber,
-          sideAPoints: game.sideAPoints,
-          sideBPoints: game.sideBPoints,
-          winnerId: gameWinnerId,
-          completedAt: game.isComplete ? new Date() : null,
-        },
-      });
+        await prisma.matchGame.upsert({
+          where: { matchId_gameNumber: { matchId, gameNumber: game.gameNumber } },
+          update: {
+            sideAPoints: game.sideAPoints,
+            sideBPoints: game.sideBPoints,
+            winnerId: gameWinnerId,
+            completedAt: game.isComplete ? new Date() : null,
+          },
+          create: {
+            matchId,
+            gameNumber: game.gameNumber,
+            sideAPoints: game.sideAPoints,
+            sideBPoints: game.sideBPoints,
+            winnerId: gameWinnerId,
+            completedAt: game.isComplete ? new Date() : null,
+          },
+        });
+      }
     }
 
-    // ─────────────────────────────────────────────────────────
-    // Automatic Knockout Bracket Winner Advancement & Sync
-    // ─────────────────────────────────────────────────────────
-    await advanceBracketWinner(matchId);
+    // Automatic Knockout Bracket Winner Advancement (only if completed or winner determined)
+    if (nextState.isMatchComplete || nextState.status === 'COMPLETED' || nextState.winner) {
+      await advanceBracketWinner(matchId);
+    }
 
-    // ─────────────────────────────────────────────────────────
-    // Audit Logging & Socket.IO Broadcasts
-    // ─────────────────────────────────────────────────────────
+    // Audit Logging
     let auditAction: any = null;
-    if (type === 'POINT_SIDE_A' || type === 'POINT_SIDE_B') auditAction = 'POINT_ADDED';
+    if (type === 'POINT_SIDE_A' || type === 'POINT_SIDE_B' || type === 'GOAL' || type === 'RUNS_SCORED') auditAction = 'POINT_ADDED';
     else if (type === 'UNDO') auditAction = 'POINT_UNDONE';
     else if (type === 'PAUSE') auditAction = 'MATCH_PAUSED';
     else if (type === 'RESUME') auditAction = 'MATCH_RESUMED';
@@ -300,28 +412,27 @@ scoringRouter.post(
         entity: 'Match',
         entityId: matchId,
         metadata: {
+          sport: matchSport,
           type,
           sideAName: match.sideAName,
           sideBName: match.sideBName,
           status: nextState.status,
-          gamesWon: `${nextState.sideAGamesWon}-${nextState.sideBGamesWon}`,
+          score: `${sideAScore}-${sideBScore}`,
         },
       });
     }
 
     const broadcastPayload = { matchId, state: nextState, match: updatedMatch };
 
-    // Primary score update — always broadcast
+    // Primary score update — broadcast to room and lobby
     broadcastScoreUpdate(matchId, broadcastPayload);
 
-    // Specific lifecycle events
     if (type === 'PAUSE') {
       broadcastMatchEvent('match:paused', matchId, broadcastPayload);
     } else if (type === 'RESUME') {
       broadcastMatchEvent('match:resumed', matchId, broadcastPayload);
     } else if (nextState.isMatchComplete) {
       broadcastMatchEvent('match:completed', matchId, broadcastPayload);
-      // Broadcast fixture update for bracket progression
       broadcastMatchEvent('fixture:updated', matchId, { matchId, status: 'COMPLETED', winnerId });
     } else if (nextState.status === 'LIVE' && currentState.status !== 'LIVE') {
       broadcastMatchEvent('match:started', matchId, broadcastPayload);
@@ -334,4 +445,3 @@ scoringRouter.post(
     });
   }
 );
-

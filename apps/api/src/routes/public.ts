@@ -1,28 +1,15 @@
 import { Router } from 'express';
 import { prisma } from '@badminton-live/database';
-import { replayMatchEvents, MatchEvent, MatchEventType } from '@badminton-live/scoring';
+import { replaySportMatchEvents, createInitialSportMatchState } from '@badminton-live/scoring';
 
 export const publicRouter = Router();
 
-// ---------------------------------------------------------------------------
-// Helper: Map a Prisma MatchEvent row to the scoring engine MatchEvent shape
-// ---------------------------------------------------------------------------
-function toScoringEvent(row: {
-  id: string;
-  matchId: string;
-  gameNumber: number;
-  type: string;
-  scorerId: string;
-  createdAt: Date;
-}): MatchEvent {
-  return {
-    id: row.id,
-    matchId: row.matchId,
-    gameNumber: row.gameNumber,
-    type: row.type as MatchEventType,
-    timestamp: row.createdAt.toISOString(),
-    createdBy: row.scorerId,
-  };
+// In-memory cache for high-concurrency public home queries
+let homeCache: { timestamp: number; data: any } | null = null;
+const HOME_CACHE_TTL_MS = 2000;
+
+export function invalidateHomeCache() {
+  homeCache = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -31,19 +18,23 @@ function toScoringEvent(row: {
 // ---------------------------------------------------------------------------
 publicRouter.get('/home', async (_req, res) => {
   try {
-    const now = new Date();
+    if (homeCache && Date.now() - homeCache.timestamp < HOME_CACHE_TTL_MS) {
+      res.setHeader('X-Cache', 'HIT');
+      res.json(homeCache.data);
+      return;
+    }
 
     const [activeMatchRows, upcomingMatches, recentResults, tournaments, announcements] = await Promise.all([
-      // Active / paused matches — include events for scoring state computation
+      // Active / paused matches — select currentGameState directly
       prisma.match.findMany({
         where: { status: { in: ['LIVE', 'PAUSED'] } },
         include: {
           category: true,
           court: { select: { id: true, name: true, location: true } },
+          tournament: { select: { id: true, name: true, slug: true, sport: true } },
           games: true,
-          events: { orderBy: { createdAt: 'asc' } },
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { updatedAt: 'desc' },
       }),
 
       // Upcoming matches (scheduled, in the future or no timestamp)
@@ -97,19 +88,19 @@ publicRouter.get('/home', async (_req, res) => {
       }),
     ]);
 
-    // Replay events for active matches to calculate live scoring state
+    // Calculate live scoring state for active matches
     const activeMatches = activeMatchRows.map((match) => {
       try {
-        const targetPoints = (match.currentGameState as any)?.targetPoints || 21;
+        const matchSport = (match as any).sport || (match as any).tournament?.sport || 'BADMINTON';
         const metadata = {
           isDoubles: match.category?.type?.includes('DOUBLES'),
+          sideAId: match.sideAId,
           sideAName: match.sideAName,
+          sideBId: match.sideBId,
           sideBName: match.sideBName,
-          initialServerName: (match.currentGameState as any)?.initialServerName,
-          initialServingSide: (match.currentGameState as any)?.initialServingSide,
         };
-        const scoringEvents = (match.events || []).map(toScoringEvent);
-        const computedState = replayMatchEvents(scoringEvents, targetPoints, metadata);
+        const computedState =
+          match.currentGameState || createInitialSportMatchState(matchSport, metadata);
         return {
           ...match,
           computedState,
@@ -125,14 +116,18 @@ publicRouter.get('/home', async (_req, res) => {
 
     const liveCourtsCount = activeMatches.length;
 
-    res.json({
+    const responsePayload = {
       activeMatches,
       upcomingMatches,
       recentResults,
       tournaments,
       announcements,
       liveCourtsCount,
-    });
+    };
+
+    homeCache = { timestamp: Date.now(), data: responsePayload };
+    res.setHeader('X-Cache', 'MISS');
+    res.json(responsePayload);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to fetch home page data' });
   }

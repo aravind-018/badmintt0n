@@ -28,12 +28,15 @@ export const AdminTournamentsPage: React.FC = () => {
   const [status, setStatus] = useState('PUBLISHED');
   const [format, setFormat] = useState('KNOCKOUT');
   const [numberOfCourts, setNumberOfCourts] = useState(4);
+  const [sport, setSport] = useState<string>('BADMINTON');
+  const [sportFilter, setSportFilter] = useState<string>('');
   const [formError, setFormError] = useState<string | null>(null);
 
   const fetchTournaments = () => {
     setLoading(true);
     let url = `/api/v1/tournaments?search=${encodeURIComponent(search)}`;
     if (statusFilter) url += `&status=${statusFilter}`;
+    if (sportFilter) url += `&sport=${sportFilter}`;
 
     fetch(url)
       .then((res) => res.json())
@@ -49,7 +52,7 @@ export const AdminTournamentsPage: React.FC = () => {
 
   useEffect(() => {
     fetchTournaments();
-  }, [search, statusFilter]);
+  }, [search, statusFilter, sportFilter]);
 
   const openCreateModal = () => {
     setEditingId(null);
@@ -62,6 +65,7 @@ export const AdminTournamentsPage: React.FC = () => {
     setStatus('PUBLISHED');
     setFormat('KNOCKOUT');
     setNumberOfCourts(4);
+    setSport('BADMINTON');
     setFormError(null);
     setIsModalOpen(true);
   };
@@ -77,6 +81,7 @@ export const AdminTournamentsPage: React.FC = () => {
     setStatus(t.status);
     setFormat(t.format);
     setNumberOfCourts(t.numberOfCourts);
+    setSport(t.sport || 'BADMINTON');
     setFormError(null);
     setIsModalOpen(true);
   };
@@ -106,6 +111,7 @@ export const AdminTournamentsPage: React.FC = () => {
       endDate,
       status,
       format,
+      sport,
       numberOfCourts: Number(numberOfCourts),
     };
 
@@ -192,6 +198,18 @@ export const AdminTournamentsPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400" />
             <select
+              value={sportFilter}
+              onChange={(e) => setSportFilter(e.target.value)}
+              className="py-2 px-3 rounded-xl bg-dark-800 border border-slate-700/80 text-white text-xs focus:outline-none focus:border-brand-500"
+            >
+              <option value="">All Sports</option>
+              <option value="BADMINTON">🏸 Badminton</option>
+              <option value="CRICKET">🏏 Cricket</option>
+              <option value="FOOTBALL">⚽ Football</option>
+              <option value="CHESS">♟️ Chess</option>
+              <option value="CARROM">🎯 Carrom</option>
+            </select>
+            <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="py-2 px-3 rounded-xl bg-dark-800 border border-slate-700/80 text-white text-xs focus:outline-none focus:border-brand-500"
@@ -221,9 +239,14 @@ export const AdminTournamentsPage: React.FC = () => {
               <div key={t.id} className="glass-card glass-card-hover p-6 rounded-2xl space-y-4 flex flex-col justify-between">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30">
-                      {t.status}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-700 text-amber-300 border border-slate-600">
+                        {t.sport === 'CRICKET' ? '🏏 Cricket' : t.sport === 'FOOTBALL' ? '⚽ Football' : t.sport === 'CHESS' ? '♟️ Chess' : t.sport === 'CARROM' ? '🎯 Carrom' : '🏸 Badminton'}
+                      </span>
+                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30">
+                        {t.status}
+                      </span>
+                    </div>
                     <span className="text-[11px] font-mono text-slate-500">{t.format}</span>
                   </div>
                   <h3 className="text-lg font-bold text-white">{t.name}</h3>
@@ -354,7 +377,21 @@ export const AdminTournamentsPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">Sport *</label>
+                  <select
+                    value={sport}
+                    onChange={(e) => setSport(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-dark-800 border border-slate-700 text-white"
+                  >
+                    <option value="BADMINTON">🏸 Badminton</option>
+                    <option value="CRICKET">🏏 Cricket</option>
+                    <option value="FOOTBALL">⚽ Football</option>
+                    <option value="CHESS">♟️ Chess</option>
+                    <option value="CARROM">🎯 Carrom</option>
+                  </select>
+                </div>
                 <div>
                   <label className="block text-slate-300 font-semibold mb-1">Status</label>
                   <select

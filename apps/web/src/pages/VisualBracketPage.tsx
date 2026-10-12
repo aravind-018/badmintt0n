@@ -103,7 +103,7 @@ export const VisualBracketPage: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-lg sm:text-xl font-bold font-sans tracking-tight text-white flex items-center gap-2">
-                  Badminton Live
+                  Premier League
                 </h1>
                 <p className="text-[11px] sm:text-xs text-slate-400">Interactive Visual Tournament Bracket & Group Stage</p>
               </div>

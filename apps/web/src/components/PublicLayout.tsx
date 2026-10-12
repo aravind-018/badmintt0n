@@ -143,8 +143,8 @@ export const PublicNav: React.FC<{ liveCount?: number }> = ({ liveCount = 0 }) =
       <div className="pub-nav-inner">
         {/* Brand */}
         <Link to="/" className="pub-brand" onClick={() => setMenuOpen(false)}>
-          <span className="pub-brand-icon">🏸</span>
-          <span className="pub-brand-text">Badminton Live</span>
+          <span className="pub-brand-icon">🏆</span>
+          <span className="pub-brand-text">Premier League</span>
         </Link>
 
         {/* Desktop links */}
@@ -359,8 +359,8 @@ export const PublicLayout: React.FC<{
     <main className="pub-main">{children}</main>
     <footer className="pub-footer">
       <div className="pub-footer-inner">
-        <span>🏸 Badminton Live</span>
-        <span>Real-time tournament scoring platform</span>
+        <span>🏆 Premier League</span>
+        <span>Multi-sport real-time tournament & scoring platform</span>
         <div className="pub-footer-links">
           <Link to="/live">Live</Link>
           <Link to="/fixtures">Fixtures</Link>

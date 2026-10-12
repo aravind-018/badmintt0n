@@ -492,36 +492,108 @@ export async function updateGroupStandingsAndQualification(
         statsA.played += 1;
         statsB.played += 1;
 
-        let aGamesWon = 0;
-        let bGamesWon = 0;
-        let aPointsScored = 0;
-        let bPointsScored = 0;
+        const tournament = await prisma.tournament.findUnique({
+          where: { id: tournamentId },
+          select: { sport: true },
+        });
+        const sport = tournament?.sport || 'BADMINTON';
 
-        for (const g of m.games) {
-          aPointsScored += g.sideAPoints;
-          bPointsScored += g.sideBPoints;
-          if (g.sideAPoints > g.sideBPoints) aGamesWon++;
-          else if (g.sideBPoints > g.sideAPoints) bGamesWon++;
-        }
+        if (sport === 'FOOTBALL') {
+          const aGoals = m.sideAScore ?? 0;
+          const bGoals = m.sideBScore ?? 0;
+          statsA.pointsScored += aGoals;
+          statsA.pointsConceded += bGoals;
+          statsB.pointsScored += bGoals;
+          statsB.pointsConceded += aGoals;
 
-        statsA.gamesWon += aGamesWon;
-        statsA.gamesLost += bGamesWon;
-        statsA.pointsScored += aPointsScored;
-        statsA.pointsConceded += bPointsScored;
+          if (aGoals > bGoals || m.winnerId === m.sideAId) {
+            statsA.won += 1;
+            statsA.tournamentPoints += 3;
+            statsB.lost += 1;
+          } else if (bGoals > aGoals || m.winnerId === m.sideBId) {
+            statsB.won += 1;
+            statsB.tournamentPoints += 3;
+            statsA.lost += 1;
+          } else {
+            // Draw
+            statsA.tournamentPoints += 1;
+            statsB.tournamentPoints += 1;
+          }
+        } else if (sport === 'CHESS') {
+          if (m.winnerId === m.sideAId) {
+            statsA.won += 1;
+            statsA.tournamentPoints += 1;
+            statsB.lost += 1;
+          } else if (m.winnerId === m.sideBId) {
+            statsB.won += 1;
+            statsB.tournamentPoints += 1;
+            statsA.lost += 1;
+          } else {
+            // Draw in Chess
+            statsA.tournamentPoints += 0.5;
+            statsB.tournamentPoints += 0.5;
+          }
+        } else if (sport === 'CRICKET') {
+          statsA.pointsScored += m.sideAScore ?? 0;
+          statsB.pointsScored += m.sideBScore ?? 0;
+          if (m.winnerId === m.sideAId) {
+            statsA.won += 1;
+            statsA.tournamentPoints += 2;
+            statsB.lost += 1;
+          } else if (m.winnerId === m.sideBId) {
+            statsB.won += 1;
+            statsB.tournamentPoints += 2;
+            statsA.lost += 1;
+          } else {
+            // Tie / No Result
+            statsA.tournamentPoints += 1;
+            statsB.tournamentPoints += 1;
+          }
+        } else if (sport === 'CARROM') {
+          statsA.pointsScored += m.sideAScore ?? 0;
+          statsB.pointsScored += m.sideBScore ?? 0;
+          if (m.winnerId === m.sideAId) {
+            statsA.won += 1;
+            statsA.tournamentPoints += 2;
+            statsB.lost += 1;
+          } else if (m.winnerId === m.sideBId) {
+            statsB.won += 1;
+            statsB.tournamentPoints += 2;
+            statsA.lost += 1;
+          }
+        } else {
+          // Standard BWF Badminton rules
+          let aGamesWon = 0;
+          let bGamesWon = 0;
+          let aPointsScored = 0;
+          let bPointsScored = 0;
 
-        statsB.gamesWon += bGamesWon;
-        statsB.gamesLost += aGamesWon;
-        statsB.pointsScored += bPointsScored;
-        statsB.pointsConceded += aPointsScored;
+          for (const g of m.games) {
+            aPointsScored += g.sideAPoints;
+            bPointsScored += g.sideBPoints;
+            if (g.sideAPoints > g.sideBPoints) aGamesWon++;
+            else if (g.sideBPoints > g.sideAPoints) bGamesWon++;
+          }
 
-        if (m.winnerId === m.sideAId) {
-          statsA.won += 1;
-          statsA.tournamentPoints += 2;
-          statsB.lost += 1;
-        } else if (m.winnerId === m.sideBId) {
-          statsB.won += 1;
-          statsB.tournamentPoints += 2;
-          statsA.lost += 1;
+          statsA.gamesWon += aGamesWon;
+          statsA.gamesLost += bGamesWon;
+          statsA.pointsScored += aPointsScored;
+          statsA.pointsConceded += bPointsScored;
+
+          statsB.gamesWon += bGamesWon;
+          statsB.gamesLost += aGamesWon;
+          statsB.pointsScored += bPointsScored;
+          statsB.pointsConceded += aPointsScored;
+
+          if (m.winnerId === m.sideAId) {
+            statsA.won += 1;
+            statsA.tournamentPoints += 2;
+            statsB.lost += 1;
+          } else if (m.winnerId === m.sideBId) {
+            statsB.won += 1;
+            statsB.tournamentPoints += 2;
+            statsA.lost += 1;
+          }
         }
       }
     }

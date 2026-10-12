@@ -30,9 +30,9 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
               </div>
               <div className="min-w-0">
                 <h1 className="text-base sm:text-xl font-bold font-sans tracking-tight text-white flex items-center gap-2 truncate">
-                  Badminton Live <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30 font-semibold shrink-0">Admin</span>
+                  Premier League <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-400 border border-brand-500/30 font-semibold shrink-0">Admin</span>
                 </h1>
-                <p className="text-[11px] text-slate-400 hidden xs:block truncate">Tournament Management System</p>
+                <p className="text-[11px] text-slate-400 hidden xs:block truncate">Multi-Sport Tournament Management</p>
               </div>
             </Link>
           </div>

@@ -87,9 +87,63 @@ export type MatchStatus =
   | 'WALKOVER'
   | 'RETIRED';
 
+export type SportType = 'BADMINTON' | 'CRICKET' | 'FOOTBALL' | 'CHESS' | 'CARROM';
+
+export interface SportInfo {
+  id: SportType;
+  name: string;
+  icon: string;
+  defaultFormat: TournamentFormat;
+  venueLabel: string;
+  scoreLabel: string;
+}
+
+export const SPORTS_REGISTRY: Record<SportType, SportInfo> = {
+  BADMINTON: {
+    id: 'BADMINTON',
+    name: 'Badminton',
+    icon: '🏸',
+    defaultFormat: 'KNOCKOUT',
+    venueLabel: 'Court',
+    scoreLabel: 'Points / Sets',
+  },
+  CRICKET: {
+    id: 'CRICKET',
+    name: 'Cricket',
+    icon: '🏏',
+    defaultFormat: 'GROUP_KNOCKOUT',
+    venueLabel: 'Pitch',
+    scoreLabel: 'Runs / Wickets',
+  },
+  FOOTBALL: {
+    id: 'FOOTBALL',
+    name: 'Football',
+    icon: '⚽',
+    defaultFormat: 'GROUP_KNOCKOUT',
+    venueLabel: 'Field',
+    scoreLabel: 'Goals',
+  },
+  CHESS: {
+    id: 'CHESS',
+    name: 'Chess',
+    icon: '♟️',
+    defaultFormat: 'SWISS',
+    venueLabel: 'Board',
+    scoreLabel: 'Score / Clock',
+  },
+  CARROM: {
+    id: 'CARROM',
+    name: 'Carrom',
+    icon: '🎯',
+    defaultFormat: 'KNOCKOUT',
+    venueLabel: 'Board',
+    scoreLabel: 'Points / Boards',
+  },
+};
+
 export type TournamentStatus = 'DRAFT' | 'PUBLISHED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 
-export type TournamentFormat = 'KNOCKOUT' | 'ROUND_ROBIN' | 'GROUP_KNOCKOUT';
+export type TournamentFormat = 'KNOCKOUT' | 'ROUND_ROBIN' | 'GROUP_KNOCKOUT' | 'SWISS';
 
 export type CategoryType =
   | 'MENS_SINGLES'

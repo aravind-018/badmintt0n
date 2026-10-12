@@ -32,10 +32,19 @@ enum TournamentStatus {
   CANCELLED
 }
 
+enum SportType {
+  BADMINTON
+  CRICKET
+  FOOTBALL
+  CHESS
+  CARROM
+}
+
 enum TournamentFormat {
   KNOCKOUT
   ROUND_ROBIN
   GROUP_KNOCKOUT
+  SWISS
 }
 
 enum CategoryType {
@@ -81,6 +90,26 @@ enum MatchEventType {
   WALKOVER
   RETIRE
   COMPLETE
+  BALL_BOWLED
+  RUNS_SCORED
+  WICKET
+  EXTRA
+  INNINGS_END
+  GOAL
+  CARD_YELLOW
+  CARD_RED
+  SUBSTITUTION
+  PERIOD_END
+  PENALTY_SHOOTOUT
+  MOVE_MADE
+  CLOCK_TICK
+  DRAW_OFFERED
+  RESIGNATION
+  TIME_OUT
+  CARROM_POINT
+  FOUL
+  QUEEN_COVERED
+  BOARD_COMPLETE
 }
 
 enum AuditAction {
@@ -135,6 +164,7 @@ model Tournament {
   startDate      DateTime
   endDate        DateTime
   status         TournamentStatus @default(DRAFT)
+  sport          SportType        @default(BADMINTON)
   format         TournamentFormat
   numberOfCourts Int              @default(1)
   createdById    String
@@ -151,6 +181,8 @@ model Tournament {
 
   @@index([slug])
   @@index([status])
+  @@index([sport])
+  @@index([sport, status])
 }
 
 model Category {
@@ -259,6 +291,9 @@ model Match {
   startedAt        DateTime?
   completedAt      DateTime?
   currentGameState Json?
+  sport            SportType   @default(BADMINTON)
+  sideAScore       Int         @default(0)
+  sideBScore       Int         @default(0)
   sideAGamesWon    Int         @default(0)
   sideBGamesWon    Int         @default(0)
   nextMatchId      String?
@@ -277,6 +312,10 @@ model Match {
   games  MatchGame[]
   events MatchEvent[]
 
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([sport])
+  @@index([sport, status])
   @@index([tournamentId, status])
   @@index([courtId, status])
   @@index([scorerId])
@@ -357,6 +396,7 @@ model Announcement {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  @@index([publishedAt])
   @@index([tournamentId, publishedAt])
 }
 

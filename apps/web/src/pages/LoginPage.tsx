@@ -71,10 +71,10 @@ export const LoginPage: React.FC = () => {
             <Trophy className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight font-sans text-white">
-            Badminton Live
+            Premier League
           </h1>
           <p className="text-slate-400 text-sm">
-            Sign in to access your tournament management or court scoring console
+            Sign in to access your multi-sport tournament management or scorer console
           </p>
         </div>
 

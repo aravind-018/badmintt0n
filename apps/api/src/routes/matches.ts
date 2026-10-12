@@ -15,6 +15,8 @@ import {
 } from '../utils/fixtureGenerator';
 import { validateGroupKnockoutConfig, isPowerOfTwo, getNextPowerOfTwo, getKnockoutRoundName } from '@badminton-live/shared';
 import { logAudit } from '../utils/audit';
+import { invalidateHomeCache } from './public';
+import { invalidateLiveCache } from '../socket';
 
 export const matchRouter = Router();
 
@@ -48,13 +50,16 @@ const matchSchema = z.object({
   nextMatchId: z.string().optional().nullable(),
   nextMatchSlot: z.enum(['A', 'B']).optional().nullable(),
   targetPoints: z.number().int().min(1).max(100).optional().default(21),
+  sport: z.enum(['BADMINTON', 'CRICKET', 'FOOTBALL', 'CHESS', 'CARROM']).optional().default('BADMINTON'),
+  sideAScore: z.number().int().optional().default(0),
+  sideBScore: z.number().int().optional().default(0),
   initialServerName: z.string().optional().nullable(),
   initialServingSide: z.enum(['A', 'B']).optional().nullable(),
 });
 
 // GET /api/v1/matches — List matches with filters & search
 matchRouter.get('/', async (req, res) => {
-  const { tournamentId, categoryId, courtId, round, status, date, search } = req.query;
+  const { tournamentId, categoryId, courtId, round, status, sport, date, search, page, limit } = req.query;
 
   const where: any = {};
 
@@ -63,6 +68,7 @@ matchRouter.get('/', async (req, res) => {
   if (courtId) where.courtId = courtId as string;
   if (round) where.round = round as string;
   if (status) where.status = status as any;
+  if (sport) where.sport = sport as any;
 
   if (date) {
     const startDate = new Date(date as string);
@@ -80,12 +86,17 @@ matchRouter.get('/', async (req, res) => {
     ];
   }
 
+  const take = limit ? Math.min(parseInt(limit as string, 10), 200) : undefined;
+  const skip = page && take ? (Math.max(1, parseInt(page as string, 10)) - 1) * take : undefined;
+
   const matches = await prisma.match.findMany({
     where,
+    skip,
+    take,
     include: {
       category: { select: { id: true, type: true } },
       court: { select: { id: true, name: true, location: true } },
-      tournament: { select: { id: true, name: true, slug: true } },
+      tournament: { select: { id: true, name: true, slug: true, sport: true } },
     },
     orderBy: [{ scheduledAt: 'asc' }, { createdAt: 'asc' }],
   });
@@ -319,6 +330,15 @@ matchRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMEN
   if (targetPoints !== undefined) newGameState.targetPoints = targetPoints;
   if (initialServerName !== undefined) newGameState.initialServerName = initialServerName;
   if (initialServingSide !== undefined) newGameState.initialServingSide = initialServingSide;
+
+  // If reopening a completed match to LIVE
+  if (updateData.status === 'LIVE' && (updateData.winnerId === null || updateData.winnerId === undefined)) {
+    updateData.winnerId = null;
+    updateData.completedAt = null;
+    newGameState.isMatchComplete = false;
+    newGameState.status = 'LIVE';
+    delete newGameState.winner;
+  }
   updateData.currentGameState = newGameState;
 
   const updatedMatch = await prisma.match.update({
@@ -329,6 +349,10 @@ matchRouter.put('/:id', authenticateToken, requireRole('SUPER_ADMIN', 'TOURNAMEN
 
   // Automatic Bracket Winner Advancement
   await advanceBracketWinner(id);
+
+  // Invalidate public & live caches
+  invalidateHomeCache();
+  invalidateLiveCache();
 
   res.json({ message: 'Match updated successfully', match: updatedMatch });
 });

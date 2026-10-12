@@ -7,7 +7,7 @@ export const tournamentRouter = Router();
 
 // GET /api/v1/tournaments — List tournaments with search, filter, pagination
 tournamentRouter.get('/', async (req, res) => {
-  const { search, status, format, page = '1', limit = '10' } = req.query;
+  const { search, status, format, sport, page = '1', limit = '10' } = req.query;
 
   const pageNum = parseInt(page as string, 10);
   const limitNum = parseInt(limit as string, 10);
@@ -29,6 +29,10 @@ tournamentRouter.get('/', async (req, res) => {
 
   if (format) {
     where.format = format;
+  }
+
+  if (sport) {
+    where.sport = sport;
   }
 
   const [tournaments, total] = await Promise.all([

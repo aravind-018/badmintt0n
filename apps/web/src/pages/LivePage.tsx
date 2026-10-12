@@ -158,8 +158,8 @@ export function LivePage() {
       {/* Navbar */}
       <nav className="live-nav">
         <Link to="/" className="live-nav-brand">
-          <span className="brand-shuttle">🏸</span>
-          <span>Badminton Live</span>
+          <span className="brand-shuttle">🏆</span>
+          <span>Premier League</span>
         </Link>
         <div className="live-nav-actions">
           <Link to="/tv" className="tv-link">📺 TV Mode</Link>

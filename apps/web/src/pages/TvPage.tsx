@@ -162,8 +162,8 @@ export function TvPage() {
       {/* TV Header Bar */}
       <div className="tv-header">
         <div className="tv-brand">
-          <span>🏸</span>
-          <span className="tv-brand-text">Badminton Live</span>
+          <span>🏆</span>
+          <span className="tv-brand-text">Premier League</span>
         </div>
         <div className="tv-header-center">
           <div className="tv-title">Live Scoreboard</div>

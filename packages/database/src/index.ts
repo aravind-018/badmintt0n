@@ -32,10 +32,23 @@ const clientOptions: any = {
       : ['error'],
 };
 
-if (dbUrl) {
+function getOptimizedDbUrl(rawUrl: string): string {
+  if (!rawUrl) return rawUrl;
+  let optimized = rawUrl;
+  // Automatically configure connection pooling parameters if not present
+  if (!optimized.includes('connection_limit=')) {
+    const separator = optimized.includes('?') ? '&' : '?';
+    optimized = `${optimized}${separator}connection_limit=25&pool_timeout=20`;
+  }
+  return optimized;
+}
+
+const optimizedDbUrl = getOptimizedDbUrl(dbUrl);
+
+if (optimizedDbUrl) {
   clientOptions.datasources = {
     db: {
-      url: dbUrl,
+      url: optimizedDbUrl,
     },
   };
 }

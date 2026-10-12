@@ -130,12 +130,16 @@ export const ScorerConsolePage: React.FC = () => {
       showToast('This match cannot be started until both participants are determined.', 'error');
       return;
     }
-    if (!selectedServerName) {
-      showToast('Please select the starting server before starting the match.', 'error');
-      return;
+    const currentSport = matchData?.sport || 'BADMINTON';
+    let chosenPlayer: any = null;
+    if (currentSport === 'BADMINTON') {
+      if (!selectedServerName) {
+        showToast('Please select the starting server before starting the match.', 'error');
+        return;
+      }
+      const playersList = getMatchPlayers(matchData);
+      chosenPlayer = playersList.find((p) => p.name === selectedServerName) || playersList[0];
     }
-    const playersList = getMatchPlayers(matchData);
-    const chosenPlayer = playersList.find((p) => p.name === selectedServerName) || playersList[0];
 
     setActionLoading(true);
     try {
@@ -147,17 +151,15 @@ export const ScorerConsolePage: React.FC = () => {
         },
         body: JSON.stringify({
           status: 'LIVE',
-          initialServerName: chosenPlayer.name,
-          initialServingSide: chosenPlayer.side,
+          ...(chosenPlayer ? {
+            initialServerName: chosenPlayer.name,
+            initialServingSide: chosenPlayer.side,
+          } : {}),
         }),
       });
 
       if (res.ok) {
-        showToast(
-          `Match started! Starting server: ${chosenPlayer.name} (${
-            chosenPlayer.side === 'A' ? matchData?.sideAName : matchData?.sideBName
-          })`
-        );
+        showToast(`Match started! Status is now LIVE`);
         fetchScoringState(selectedMatchId);
         fetchMatches();
       } else {
@@ -171,11 +173,12 @@ export const ScorerConsolePage: React.FC = () => {
   };
 
   // Dispatch scoring event to backend
-  const handleScoringEvent = async (type: string, side?: 'A' | 'B') => {
+  const handleScoringEvent = async (type: string, side?: 'A' | 'B', extraPayload: Record<string, any> = {}) => {
     if (!selectedMatchId || actionLoading) return;
 
-    // Validation: ensure initial server is selected before first point
-    if (matchData?.status === 'SCHEDULED' || matchData?.status === 'READY') {
+    // Validation: ensure initial server is selected before first point in badminton
+    const currentSport = matchData?.sport || 'BADMINTON';
+    if (currentSport === 'BADMINTON' && (matchData?.status === 'SCHEDULED' || matchData?.status === 'READY')) {
       if (!selectedServerName) {
         showToast('Please select the starting server before starting the match.', 'error');
         return;
@@ -207,7 +210,7 @@ export const ScorerConsolePage: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ type, side, requestId }),
+        body: JSON.stringify({ type, side, requestId, ...extraPayload }),
       });
 
       const data = await res.json();
@@ -326,7 +329,7 @@ export const ScorerConsolePage: React.FC = () => {
                 </span>
               </div>
               <h1 className="text-xs sm:text-base font-extrabold text-white truncate max-w-full">
-                {matchData?.category?.type?.replace('_', ' ') || 'Badminton Match'} • {matchData?.round || 'Round 1'}
+                {matchData?.sport === 'CRICKET' ? '🏏 Cricket Match' : matchData?.sport === 'FOOTBALL' ? '⚽ Football Match' : matchData?.sport === 'CHESS' ? '♟️ Chess Match' : matchData?.sport === 'CARROM' ? '🎯 Carrom Match' : (matchData?.category?.type?.replace('_', ' ') || '🏸 Badminton Match')} • {matchData?.round || 'Round 1'}
               </h1>
             </div>
           </div>
@@ -362,12 +365,22 @@ export const ScorerConsolePage: React.FC = () => {
         </div>
       ) : (
         <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-4 flex flex-col justify-between gap-4 sm:gap-6 overflow-x-hidden">
-          {/* Status & Deuce Indicator Banner */}
+          {/* Status & Match Indicator Banner */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-400">
             <div className="flex items-center gap-2">
-              <span className="font-bold text-white">Current Game:</span>
-              <span className="text-indigo-400 font-extrabold">Game {scoringState?.currentGameNumber || 1}</span>
-              {currentGame.isDeuce && (
+              <span className="font-bold text-white">Status:</span>
+              <span className="text-indigo-400 font-extrabold uppercase">
+                {matchData?.sport === 'CRICKET'
+                  ? `Innings ${scoringState?.currentInningsNumber || 1} • Overs: ${(scoringState?.currentInningsNumber === 2 ? scoringState?.innings2 : scoringState?.innings1)?.oversCompleted || 0}.${(scoringState?.currentInningsNumber === 2 ? scoringState?.innings2 : scoringState?.innings1)?.ballsInCurrentOver || 0}`
+                  : matchData?.sport === 'FOOTBALL'
+                  ? `Half: ${scoringState?.currentPeriod || 'FIRST_HALF'} • ${scoringState?.regularTimeMinutes || 90}'`
+                  : matchData?.sport === 'CHESS'
+                  ? `Turn: ${scoringState?.activeColor || 'WHITE'} • Moves: ${scoringState?.totalMovesCount || 0}`
+                  : matchData?.sport === 'CARROM'
+                  ? `Board: ${scoringState?.currentBoardNumber || 1} of ${scoringState?.maxBoards || 8}`
+                  : `Game ${scoringState?.currentGameNumber || 1}`}
+              </span>
+              {currentGame.isDeuce && matchData?.sport === 'BADMINTON' && (
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-bold text-[10px] animate-pulse">
                   DEUCE (2 Point Lead Required)
                 </span>
@@ -375,24 +388,34 @@ export const ScorerConsolePage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-4 text-slate-300 font-medium">
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-400 text-[11px]">Max Points:</span>
-                <select
-                  value={scoringState?.targetPoints || 21}
-                  onChange={(e) => handleTargetPointsChange(Number(e.target.value))}
-                  className="bg-slate-950 border border-slate-700 text-amber-400 font-bold px-2 py-0.5 rounded text-[11px] cursor-pointer"
-                >
-                  <option value={21}>21 pts (BWF)</option>
-                  <option value={15}>15 pts</option>
-                  <option value={11}>11 pts</option>
-                  <option value={30}>30 pts</option>
-                </select>
-              </div>
+              {matchData?.sport === 'BADMINTON' && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 text-[11px]">Max Points:</span>
+                  <select
+                    value={scoringState?.targetPoints || 21}
+                    onChange={(e) => handleTargetPointsChange(Number(e.target.value))}
+                    className="bg-slate-950 border border-slate-700 text-amber-400 font-bold px-2 py-0.5 rounded text-[11px] cursor-pointer"
+                  >
+                    <option value={21}>21 pts (BWF)</option>
+                    <option value={15}>15 pts</option>
+                    <option value={11}>11 pts</option>
+                    <option value={30}>30 pts</option>
+                  </select>
+                </div>
+              )}
 
               <div className="flex items-center gap-1.5">
-                <span>Match Score:</span>
+                <span>Score:</span>
                 <span className="font-bold text-white font-mono text-sm">
-                  {scoringState?.sideAGamesWon || 0} - {scoringState?.sideBGamesWon || 0}
+                  {matchData?.sport === 'CRICKET'
+                    ? `${scoringState?.sideAScoreText || '0/0'} vs ${scoringState?.sideBScoreText || '0/0'}`
+                    : matchData?.sport === 'FOOTBALL'
+                    ? `${scoringState?.sideAScore ?? 0} - ${scoringState?.sideBScore ?? 0}`
+                    : matchData?.sport === 'CHESS'
+                    ? (scoringState?.result || 'IN_PROGRESS')
+                    : matchData?.sport === 'CARROM'
+                    ? `${scoringState?.sideATotalPoints ?? 0} - ${scoringState?.sideBTotalPoints ?? 0}`
+                    : `${scoringState?.sideAGamesWon || 0} - ${scoringState?.sideBGamesWon || 0}`}
                 </span>
               </div>
             </div>
@@ -420,11 +443,11 @@ export const ScorerConsolePage: React.FC = () => {
                     <Radio className="w-5 h-5 text-amber-400 animate-pulse" /> MATCH SETUP
                   </h3>
                   <p className="text-slate-400 text-xs mt-0.5">
-                    Select the starting server for the first rally before beginning live score recording
+                    {matchData?.sport === 'BADMINTON' ? 'Select the starting server for the first rally before beginning live score recording' : 'Confirm match participants and start match to begin live score updates'}
                   </p>
                 </div>
                 <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  STARTING SERVER REQUIRED
+                  {matchData?.sport === 'BADMINTON' ? 'STARTING SERVER REQUIRED' : 'READY TO START'}
                 </span>
               </div>
 
@@ -441,55 +464,59 @@ export const ScorerConsolePage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Starting Server Selection */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-amber-400 uppercase tracking-wider block">
-                    Starting Server <span className="text-rose-400">*</span>
-                  </label>
-                  <select
-                    value={selectedServerName}
-                    onChange={(e) => setSelectedServerName(e.target.value)}
-                    className="w-full py-2.5 px-3.5 rounded-xl bg-slate-950 border border-amber-500/50 text-white font-bold text-xs sm:text-sm focus:outline-none focus:border-amber-400 cursor-pointer"
-                  >
-                    <option value="">-- Select Starting Server --</option>
-                    {getMatchPlayers(matchData).map((p, idx) => (
-                      <option key={idx} value={p.name}>
-                        {p.name} ({p.side === 'A' ? matchData?.sideAName : matchData?.sideBName})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/* Starting Server Selection (Badminton Only) */}
+                {matchData?.sport === 'BADMINTON' && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-amber-400 uppercase tracking-wider block">
+                      Starting Server <span className="text-rose-400">*</span>
+                    </label>
+                    <select
+                      value={selectedServerName}
+                      onChange={(e) => setSelectedServerName(e.target.value)}
+                      className="w-full py-2.5 px-3.5 rounded-xl bg-slate-950 border border-amber-500/50 text-white font-bold text-xs sm:text-sm focus:outline-none focus:border-amber-400 cursor-pointer"
+                    >
+                      <option value="">-- Select Starting Server --</option>
+                      {getMatchPlayers(matchData).map((p, idx) => (
+                        <option key={idx} value={p.name}>
+                          {p.name} ({p.side === 'A' ? matchData?.sideAName : matchData?.sideBName})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
-              {/* Initial Server Preview Bar */}
-              <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div>
-                  <span className="text-slate-400 block text-[11px] font-medium">SERVING TEAM</span>
-                  <span className="font-extrabold text-white text-sm block mt-0.5">
-                    {selectedServerName ? (
-                      getMatchPlayers(matchData).find((p) => p.name === selectedServerName)?.side === 'A'
-                        ? matchData?.sideAName
-                        : matchData?.sideBName
-                    ) : (
-                      <span className="text-slate-500 font-normal italic">Select server above</span>
-                    )}
-                  </span>
-                </div>
+              {/* Initial Server Preview Bar (Badminton Only) */}
+              {matchData?.sport === 'BADMINTON' && (
+                <div className="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[11px] font-medium">SERVING TEAM</span>
+                    <span className="font-extrabold text-white text-sm block mt-0.5">
+                      {selectedServerName ? (
+                        getMatchPlayers(matchData).find((p) => p.name === selectedServerName)?.side === 'A'
+                          ? matchData?.sideAName
+                          : matchData?.sideBName
+                      ) : (
+                        <span className="text-slate-500 font-normal italic">Select server above</span>
+                      )}
+                    </span>
+                  </div>
 
-                <div>
-                  <span className="text-slate-400 block text-[11px] font-medium">INITIAL SERVER</span>
-                  <span className="font-extrabold text-amber-400 text-sm block mt-0.5">
-                    {selectedServerName || 'None selected'}
-                  </span>
-                </div>
+                  <div>
+                    <span className="text-slate-400 block text-[11px] font-medium">INITIAL SERVER</span>
+                    <span className="font-extrabold text-amber-400 text-sm block mt-0.5">
+                      {selectedServerName || 'None selected'}
+                    </span>
+                  </div>
 
-                <div className="text-right">
-                  <span className="text-slate-400 block text-[11px] font-medium">SERVICE COURT</span>
-                  <span className="font-black text-emerald-400 text-xs px-2.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 inline-block mt-0.5">
-                    RIGHT (0-0)
-                  </span>
+                  <div className="text-right">
+                    <span className="text-slate-400 block text-[11px] font-medium">SERVICE COURT</span>
+                    <span className="font-black text-emerald-400 text-xs px-2.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/30 inline-block mt-0.5">
+                      RIGHT (0-0)
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="pt-2 flex justify-end">
                 <button
@@ -610,92 +637,319 @@ export const ScorerConsolePage: React.FC = () => {
             </div>
           )}
 
-          {/* Primary Scoring Touch Pad Grid (2 Columns on mobile for one-hand access without vertical scrolling) */}
-          <div className="grid grid-cols-2 gap-2 sm:gap-4 flex-1 items-stretch">
-            {/* SIDE A CARD */}
-            <div
-              className={`bg-slate-900/80 p-3 sm:p-5 rounded-2xl sm:rounded-3xl flex flex-col justify-between border-2 transition-all duration-200 select-none ${
-                scoringState?.winner === 'A'
-                  ? 'border-emerald-500 bg-emerald-500/10'
-                  : scoringState?.servingState?.servingSide === 'A'
-                  ? 'border-amber-400/80 bg-amber-500/5'
-                  : 'border-slate-800 hover:border-indigo-500/50'
-              }`}
-            >
-              <div className="text-center space-y-0.5">
-                <div className="flex items-center justify-center gap-1">
-                  <span className="text-[10px] sm:text-xs font-bold text-indigo-400 uppercase tracking-wider">SIDE A</span>
-                  {scoringState?.servingState?.servingSide === 'A' && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[9px] font-black animate-pulse">
-                      🏸 SERVING ({scoringState.servingState.serviceCourt})
-                    </span>
-                  )}
+          {/* Sport-Specific Scoring Pads */}
+          {matchData?.sport === 'CRICKET' ? (
+            /* Cricket Scoring Pad */
+            <div className="flex-1 flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 text-center">
+                  <div className="text-[10px] uppercase font-bold text-indigo-400">Batting Team</div>
+                  <div className="text-lg font-bold text-white truncate">{matchData?.sideAName}</div>
+                  <div className="text-4xl font-black text-amber-400 my-2">
+                    {scoringState?.innings1?.totalRuns || 0}/{scoringState?.innings1?.wickets || 0}
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    Overs: {scoringState?.innings1?.oversCompleted || 0}.{scoringState?.innings1?.ballsInCurrentOver || 0}
+                  </div>
                 </div>
-                <h2 className="text-sm sm:text-2xl font-extrabold text-white truncate" title={matchData.sideAName}>
-                  {matchData.sideAName}
-                </h2>
-                <div className="text-[10px] sm:text-xs text-slate-400 font-medium">Sets: {scoringState?.sideAGamesWon || 0}</div>
-              </div>
 
-              {/* Big Score Display */}
-              <div className="my-2 sm:my-4 text-center">
-                <div className="text-5xl sm:text-7xl md:text-8xl font-black font-mono tracking-tight text-white drop-shadow-md">
-                  {currentGame.sideAPoints}
+                <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 text-center">
+                  <div className="text-[10px] uppercase font-bold text-cyan-400">Bowling Team</div>
+                  <div className="text-lg font-bold text-white truncate">{matchData?.sideBName}</div>
+                  <div className="text-4xl font-black text-slate-300 my-2">
+                    {scoringState?.innings2 ? `${scoringState.innings2.totalRuns}/${scoringState.innings2.wickets}` : 'Innings 2'}
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    {scoringState?.target ? `Target: ${scoringState.target}` : 'First Innings'}
+                  </div>
                 </div>
               </div>
 
-              {/* Large Touch Button */}
-              <button
-                onClick={() => handleScoringEvent('POINT_SIDE_A', 'A')}
-                disabled={actionLoading || isMatchComplete}
-                className="w-full py-4 sm:py-6 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 active:from-indigo-700 active:to-indigo-600 text-white font-black text-sm sm:text-xl shadow-xl active:scale-95 transition disabled:opacity-40 disabled:pointer-events-none select-none touch-manipulation min-h-[54px]"
-              >
-                +1 POINT
-              </button>
+              {/* Cricket Touch Controls */}
+              <div className="bg-slate-900/80 p-3 sm:p-4 rounded-2xl border border-slate-800 space-y-3">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ball Runs</div>
+                <div className="grid grid-cols-6 gap-2">
+                  {[0, 1, 2, 3, 4, 6].map((run) => (
+                    <button
+                      key={run}
+                      onClick={() => handleScoringEvent('BALL_BOWLED', undefined, { runs: run })}
+                      disabled={actionLoading || isMatchComplete}
+                      className="py-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-white font-extrabold text-lg transition disabled:opacity-40"
+                    >
+                      {run === 0 ? '•' : run}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider pt-1">Extras & Wickets</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    onClick={() => handleScoringEvent('EXTRA', undefined, { extraType: 'WIDE', extraRuns: 1 })}
+                    disabled={actionLoading || isMatchComplete}
+                    className="py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 font-bold text-xs"
+                  >
+                    +1 WIDE
+                  </button>
+                  <button
+                    onClick={() => handleScoringEvent('EXTRA', undefined, { extraType: 'NO_BALL', extraRuns: 1 })}
+                    disabled={actionLoading || isMatchComplete}
+                    className="py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 font-bold text-xs"
+                  >
+                    +1 NO BALL
+                  </button>
+                  <button
+                    onClick={() => handleScoringEvent('WICKET', undefined, { wicketType: 'BOWLED' })}
+                    disabled={actionLoading || isMatchComplete}
+                    className="py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 font-bold text-xs"
+                  >
+                    OUT (WICKET)
+                  </button>
+                  <button
+                    onClick={() => handleScoringEvent('STRIKE_ROTATE')}
+                    disabled={actionLoading || isMatchComplete}
+                    className="py-2.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-bold text-xs"
+                  >
+                    ROTATE STRIKE
+                  </button>
+                </div>
+              </div>
             </div>
-
-            {/* SIDE B CARD */}
-            <div
-              className={`bg-slate-900/80 p-3 sm:p-5 rounded-2xl sm:rounded-3xl flex flex-col justify-between border-2 transition-all duration-200 select-none ${
-                scoringState?.winner === 'B'
-                  ? 'border-emerald-500 bg-emerald-500/10'
-                  : scoringState?.servingState?.servingSide === 'B'
-                  ? 'border-amber-400/80 bg-amber-500/5'
-                  : 'border-slate-800 hover:border-cyan-500/50'
-              }`}
-            >
-              <div className="text-center space-y-0.5">
-                <div className="flex items-center justify-center gap-1">
-                  <span className="text-[10px] sm:text-xs font-bold text-cyan-400 uppercase tracking-wider">SIDE B</span>
-                  {scoringState?.servingState?.servingSide === 'B' && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[9px] font-black animate-pulse">
-                      🏸 SERVING ({scoringState.servingState.serviceCourt})
-                    </span>
-                  )}
+          ) : matchData?.sport === 'FOOTBALL' ? (
+            /* Football Scoring Pad */
+            <div className="flex-1 flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3 items-stretch">
+                <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 text-center flex flex-col justify-between">
+                  <div>
+                    <div className="text-[10px] uppercase font-bold text-indigo-400">Home</div>
+                    <div className="text-base font-bold text-white truncate">{matchData?.sideAName}</div>
+                  </div>
+                  <div className="text-6xl font-black text-white my-3">{scoringState?.sideAScore ?? 0}</div>
+                  <div className="grid grid-cols-2 gap-1.5 pt-2">
+                    <button
+                      onClick={() => handleScoringEvent('GOAL', 'A', { minute: 45 })}
+                      disabled={actionLoading || isMatchComplete}
+                      className="py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs"
+                    >
+                      ⚽ GOAL
+                    </button>
+                    <button
+                      onClick={() => handleScoringEvent('CARD_YELLOW', 'A', { minute: 45 })}
+                      disabled={actionLoading || isMatchComplete}
+                      className="py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-xs border border-amber-500/40"
+                    >
+                      🟨 YELLOW
+                    </button>
+                  </div>
                 </div>
-                <h2 className="text-sm sm:text-2xl font-extrabold text-white truncate" title={matchData.sideBName}>
-                  {matchData.sideBName}
-                </h2>
-                <div className="text-[10px] sm:text-xs text-slate-400 font-medium">Sets: {scoringState?.sideBGamesWon || 0}</div>
-              </div>
 
-              {/* Big Score Display */}
-              <div className="my-2 sm:my-4 text-center">
-                <div className="text-5xl sm:text-7xl md:text-8xl font-black font-mono tracking-tight text-white drop-shadow-md">
-                  {currentGame.sideBPoints}
+                <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 text-center flex flex-col justify-between">
+                  <div>
+                    <div className="text-[10px] uppercase font-bold text-cyan-400">Away</div>
+                    <div className="text-base font-bold text-white truncate">{matchData?.sideBName}</div>
+                  </div>
+                  <div className="text-6xl font-black text-white my-3">{scoringState?.sideBScore ?? 0}</div>
+                  <div className="grid grid-cols-2 gap-1.5 pt-2">
+                    <button
+                      onClick={() => handleScoringEvent('GOAL', 'B', { minute: 45 })}
+                      disabled={actionLoading || isMatchComplete}
+                      className="py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs"
+                    >
+                      ⚽ GOAL
+                    </button>
+                    <button
+                      onClick={() => handleScoringEvent('CARD_YELLOW', 'B', { minute: 45 })}
+                      disabled={actionLoading || isMatchComplete}
+                      className="py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-xs border border-amber-500/40"
+                    >
+                      🟨 YELLOW
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              {/* Large Touch Button */}
-              <button
-                onClick={() => handleScoringEvent('POINT_SIDE_B', 'B')}
-                disabled={actionLoading || isMatchComplete}
-                className="w-full py-4 sm:py-6 rounded-xl sm:rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 active:from-cyan-700 active:to-blue-700 text-white font-black text-sm sm:text-xl shadow-xl active:scale-95 transition disabled:opacity-40 disabled:pointer-events-none select-none touch-manipulation min-h-[54px]"
-              >
-                +1 POINT
-              </button>
             </div>
-          </div>
+          ) : matchData?.sport === 'CHESS' ? (
+            /* Chess Scoring Pad */
+            <div className="flex-1 flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 text-center">
+                  <div className="text-[10px] uppercase font-bold text-slate-300">White Player</div>
+                  <div className="text-base font-bold text-white truncate">{matchData?.sideAName}</div>
+                  <div className="text-3xl font-mono font-bold text-white my-3">
+                    {Math.floor((scoringState?.whiteTimeRemainingSeconds || 900) / 60)}:
+                    {String((scoringState?.whiteTimeRemainingSeconds || 900) % 60).padStart(2, '0')}
+                  </div>
+                </div>
+
+                <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 text-center">
+                  <div className="text-[10px] uppercase font-bold text-slate-300">Black Player</div>
+                  <div className="text-base font-bold text-white truncate">{matchData?.sideBName}</div>
+                  <div className="text-3xl font-mono font-bold text-white my-3">
+                    {Math.floor((scoringState?.blackTimeRemainingSeconds || 900) / 60)}:
+                    {String((scoringState?.blackTimeRemainingSeconds || 900) % 60).padStart(2, '0')}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => handleScoringEvent('CHECKMATE', 'A')}
+                  disabled={actionLoading || isMatchComplete}
+                  className="py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                >
+                  1-0 White Wins
+                </button>
+                <button
+                  onClick={() => handleScoringEvent('AGREE_DRAW')}
+                  disabled={actionLoading || isMatchComplete}
+                  className="py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs"
+                >
+                  ½-½ Draw
+                </button>
+                <button
+                  onClick={() => handleScoringEvent('CHECKMATE', 'B')}
+                  disabled={actionLoading || isMatchComplete}
+                  className="py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                >
+                  0-1 Black Wins
+                </button>
+              </div>
+            </div>
+          ) : matchData?.sport === 'CARROM' ? (
+            /* Carrom Scoring Pad */
+            <div className="flex-1 flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 text-center">
+                  <div className="text-[10px] uppercase font-bold text-indigo-400">Player/Team A (White)</div>
+                  <div className="text-base font-bold text-white truncate">{matchData?.sideAName}</div>
+                  <div className="text-5xl font-black text-white my-2">{scoringState?.sideATotalPoints ?? 0} pts</div>
+                  <button
+                    onClick={() => handleScoringEvent('COIN_POCKETED', 'A', { coinColor: 'WHITE' })}
+                    disabled={actionLoading || isMatchComplete}
+                    className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs"
+                  >
+                    +1 White Coin
+                  </button>
+                </div>
+
+                <div className="bg-slate-900/90 p-4 rounded-2xl border border-slate-800 text-center">
+                  <div className="text-[10px] uppercase font-bold text-cyan-400">Player/Team B (Black)</div>
+                  <div className="text-base font-bold text-white truncate">{matchData?.sideBName}</div>
+                  <div className="text-5xl font-black text-white my-2">{scoringState?.sideBTotalPoints ?? 0} pts</div>
+                  <button
+                    onClick={() => handleScoringEvent('COIN_POCKETED', 'B', { coinColor: 'BLACK' })}
+                    disabled={actionLoading || isMatchComplete}
+                    className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs"
+                  >
+                    +1 Black Coin
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleScoringEvent('QUEEN_POCKETED', 'A')}
+                  disabled={actionLoading || isMatchComplete}
+                  className="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs"
+                >
+                  👑 Pocket Queen
+                </button>
+                <button
+                  onClick={() => handleScoringEvent('BOARD_COMPLETE')}
+                  disabled={actionLoading || isMatchComplete}
+                  className="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                >
+                  ✓ Finish Board
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Original Preserved Badminton Touch Pad Grid */
+            <div className="grid grid-cols-2 gap-2 sm:gap-4 flex-1 items-stretch">
+              {/* SIDE A CARD */}
+              <div
+                className={`bg-slate-900/80 p-3 sm:p-5 rounded-2xl sm:rounded-3xl flex flex-col justify-between border-2 transition-all duration-200 select-none ${
+                  scoringState?.winner === 'A'
+                    ? 'border-emerald-500 bg-emerald-500/10'
+                    : scoringState?.servingState?.servingSide === 'A'
+                    ? 'border-amber-400/80 bg-amber-500/5'
+                    : 'border-slate-800 hover:border-indigo-500/50'
+                }`}
+              >
+                <div className="text-center space-y-0.5">
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="text-[10px] sm:text-xs font-bold text-indigo-400 uppercase tracking-wider">SIDE A</span>
+                    {scoringState?.servingState?.servingSide === 'A' && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[9px] font-black animate-pulse">
+                        🏸 SERVING ({scoringState.servingState.serviceCourt})
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="text-sm sm:text-2xl font-extrabold text-white truncate" title={matchData.sideAName}>
+                    {matchData.sideAName}
+                  </h2>
+                  <div className="text-[10px] sm:text-xs text-slate-400 font-medium">Sets: {scoringState?.sideAGamesWon || 0}</div>
+                </div>
+
+                {/* Big Score Display */}
+                <div className="my-2 sm:my-4 text-center">
+                  <div className="text-5xl sm:text-7xl md:text-8xl font-black font-mono tracking-tight text-white drop-shadow-md">
+                    {currentGame.sideAPoints}
+                  </div>
+                </div>
+
+                {/* Large Touch Button */}
+                <button
+                  onClick={() => handleScoringEvent('POINT_SIDE_A', 'A')}
+                  disabled={actionLoading || isMatchComplete}
+                  className="w-full py-4 sm:py-6 rounded-xl sm:rounded-2xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 active:from-indigo-700 active:to-indigo-600 text-white font-black text-sm sm:text-xl shadow-xl active:scale-95 transition disabled:opacity-40 disabled:pointer-events-none select-none touch-manipulation min-h-[54px]"
+                >
+                  +1 POINT
+                </button>
+              </div>
+
+              {/* SIDE B CARD */}
+              <div
+                className={`bg-slate-900/80 p-3 sm:p-5 rounded-2xl sm:rounded-3xl flex flex-col justify-between border-2 transition-all duration-200 select-none ${
+                  scoringState?.winner === 'B'
+                    ? 'border-emerald-500 bg-emerald-500/10'
+                    : scoringState?.servingState?.servingSide === 'B'
+                    ? 'border-amber-400/80 bg-amber-500/5'
+                    : 'border-slate-800 hover:border-cyan-500/50'
+                }`}
+              >
+                <div className="text-center space-y-0.5">
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="text-[10px] sm:text-xs font-bold text-cyan-400 uppercase tracking-wider">SIDE B</span>
+                    {scoringState?.servingState?.servingSide === 'B' && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[9px] font-black animate-pulse">
+                        🏸 SERVING ({scoringState.servingState.serviceCourt})
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="text-sm sm:text-2xl font-extrabold text-white truncate" title={matchData.sideBName}>
+                    {matchData.sideBName}
+                  </h2>
+                  <div className="text-[10px] sm:text-xs text-slate-400 font-medium">Sets: {scoringState?.sideBGamesWon || 0}</div>
+                </div>
+
+                {/* Big Score Display */}
+                <div className="my-2 sm:my-4 text-center">
+                  <div className="text-5xl sm:text-7xl md:text-8xl font-black font-mono tracking-tight text-white drop-shadow-md">
+                    {currentGame.sideBPoints}
+                  </div>
+                </div>
+
+                {/* Large Touch Button */}
+                <button
+                  onClick={() => handleScoringEvent('POINT_SIDE_B', 'B')}
+                  disabled={actionLoading || isMatchComplete}
+                  className="w-full py-4 sm:py-6 rounded-xl sm:rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 active:from-cyan-700 active:to-blue-700 text-white font-black text-sm sm:text-xl shadow-xl active:scale-95 transition disabled:opacity-40 disabled:pointer-events-none select-none touch-manipulation min-h-[54px]"
+                >
+                  +1 POINT
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Controls Footer Toolbar */}
           <div className="bg-slate-900 p-2.5 sm:p-4 rounded-2xl grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-xs font-bold border border-slate-800">

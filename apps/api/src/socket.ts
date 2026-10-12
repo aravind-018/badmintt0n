@@ -2,9 +2,18 @@ import { Server as HttpServer } from 'http';
 import { Server as SocketServer, Socket } from 'socket.io';
 import { env } from './config/env';
 import { prisma } from '@badminton-live/database';
-import { replayMatchEvents, MatchEvent, MatchEventType } from '@badminton-live/scoring';
+import { invalidateHomeCache } from './routes/public';
+import { createInitialSportMatchState, replaySportMatchEvents } from '@badminton-live/scoring';
 
 let io: SocketServer;
+
+// In-memory cache for live active matches
+let liveDataCache: { timestamp: number; data: any[] } | null = null;
+const LIVE_CACHE_TTL_MS = 1500;
+
+export function invalidateLiveCache() {
+  liveDataCache = null;
+}
 
 // ─────────────────────────────────────────────────────────────
 //  Broadcast Helpers — called from scoring route after any event
@@ -17,12 +26,16 @@ export interface MatchScorePayload {
 }
 
 export function broadcastScoreUpdate(matchId: string, payload: MatchScorePayload) {
+  invalidateLiveCache();
+  invalidateHomeCache();
   if (!io) return;
   io.to(`match:${matchId}`).emit('match:scoreUpdated', payload);
   io.to('live').emit('match:scoreUpdated', payload); // Live lobby listens on global room
 }
 
 export function broadcastMatchEvent(event: string, matchId: string, payload: object) {
+  invalidateLiveCache();
+  invalidateHomeCache();
   if (!io) return;
   io.to(`match:${matchId}`).emit(event, payload);
   io.to('live').emit(event, payload);
@@ -139,32 +152,23 @@ async function getMatchSnapshot(matchId: string) {
       include: {
         category: true,
         court: true,
+        tournament: true,
         games: true,
-        events: { orderBy: { createdAt: 'asc' } },
       },
     });
 
     if (!match) return null;
 
-    const targetPoints = (match.currentGameState as any)?.targetPoints || 21;
+    const matchSport = match.sport || match.tournament?.sport || 'BADMINTON';
     const metadata = {
       isDoubles: match.category?.type?.includes('DOUBLES'),
+      sideAId: match.sideAId,
       sideAName: match.sideAName,
+      sideBId: match.sideBId,
       sideBName: match.sideBName,
-      initialServerName: (match.currentGameState as any)?.initialServerName,
-      initialServingSide: (match.currentGameState as any)?.initialServingSide,
     };
 
-    const scoringEvents: MatchEvent[] = (match.events || []).map((e) => ({
-      id: e.id,
-      matchId: e.matchId,
-      gameNumber: e.gameNumber || 1,
-      type: e.type as MatchEventType,
-      timestamp: e.createdAt ? e.createdAt.toISOString() : new Date().toISOString(),
-      createdBy: e.scorerId || 'SYSTEM',
-    }));
-
-    const state = replayMatchEvents(scoringEvents, targetPoints, metadata);
+    const state = match.currentGameState || createInitialSportMatchState(matchSport, metadata);
     return { match, state };
   } catch (err) {
     console.error(`[getMatchSnapshot Error] Match ID ${matchId}:`, err);
@@ -173,6 +177,10 @@ async function getMatchSnapshot(matchId: string) {
 }
 
 export async function getActiveLiveData() {
+  if (liveDataCache && Date.now() - liveDataCache.timestamp < LIVE_CACHE_TTL_MS) {
+    return liveDataCache.data;
+  }
+
   try {
     const matches = await prisma.match.findMany({
       where: {
@@ -181,37 +189,32 @@ export async function getActiveLiveData() {
       include: {
         category: true,
         court: true,
+        tournament: true,
         games: true,
-        events: { orderBy: { createdAt: 'asc' } },
       },
       orderBy: { updatedAt: 'desc' },
     });
 
-    return matches.map((match) => {
+    const result = matches.map((match) => {
       try {
-        const targetPoints = (match.currentGameState as any)?.targetPoints || 21;
+        const matchSport = match.sport || match.tournament?.sport || 'BADMINTON';
         const metadata = {
           isDoubles: match.category?.type?.includes('DOUBLES'),
+          sideAId: match.sideAId,
           sideAName: match.sideAName,
+          sideBId: match.sideBId,
           sideBName: match.sideBName,
-          initialServerName: (match.currentGameState as any)?.initialServerName,
-          initialServingSide: (match.currentGameState as any)?.initialServingSide,
         };
-        const scoringEvents: MatchEvent[] = (match.events || []).map((e) => ({
-          id: e.id,
-          matchId: e.matchId,
-          gameNumber: e.gameNumber || 1,
-          type: e.type as MatchEventType,
-          timestamp: e.createdAt ? e.createdAt.toISOString() : new Date().toISOString(),
-          createdBy: e.scorerId || 'SYSTEM',
-        }));
-        const state = replayMatchEvents(scoringEvents, targetPoints, metadata);
+        const state = match.currentGameState || createInitialSportMatchState(matchSport, metadata);
         return { match, state };
       } catch (err) {
         console.error(`[getActiveLiveData Error] Match ID ${match.id}:`, err);
         return { match, state: null };
       }
     });
+
+    liveDataCache = { timestamp: Date.now(), data: result };
+    return result;
   } catch (err) {
     console.error('[getActiveLiveData Top Error]:', err);
     return [];

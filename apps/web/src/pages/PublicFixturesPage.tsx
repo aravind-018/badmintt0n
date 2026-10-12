@@ -61,9 +61,9 @@ export const PublicFixturesPage: React.FC = () => {
               </div>
               <div className="min-w-0">
                 <h1 className="text-base sm:text-xl font-bold font-sans tracking-tight text-white flex items-center gap-2 truncate">
-                  Badminton Live
+                  Premier League
                 </h1>
-                <p className="text-[11px] sm:text-xs text-slate-400 truncate">Public Match Schedule & Fixtures</p>
+                <p className="text-[11px] sm:text-xs text-slate-400 truncate">Multi-Sport Fixtures & Match Schedule</p>
               </div>
             </Link>
           </div>
